@@ -33,13 +33,14 @@ interface LocationState {
   patientInfo?: PatientInfo;
   prescriptionData?: PrescriptionPdfData;
   dropdownOptions?: DropdownOptions;
+  printSettings?: Record<string, boolean>;
 }
 
 export default function AddPrescriptionPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = (location.state || {}) as LocationState;
-  const { patientId, prescriptionId, patientInfo, prescriptionData, dropdownOptions } = state;
+  const { patientId, prescriptionId, patientInfo, prescriptionData, dropdownOptions, printSettings } = state;
 
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
@@ -81,6 +82,35 @@ export default function AddPrescriptionPage() {
     );
     window.open(`https://wa.me/${phone.startsWith('91') ? phone : '91' + phone}?text=${msg}`, '_blank');
   }, [patientInfo]);
+
+  const handleEditPrescription = useCallback(() => {
+    if (!patientId || !prescriptionData) return;
+    // Map PrescriptionPdfData back to PrescriptionState shape for loadPrescription
+    navigate(`/visit-details/${patientId}`, {
+      state: {
+        isEditing: true,
+        prescriptionData: {
+          prescriptionId,
+          vitals: prescriptionData.vitals,
+          symptoms: prescriptionData.symptoms,
+          diagnoses: prescriptionData.diagnoses,
+          examinationFindings: prescriptionData.examinationFindings,
+          medications: prescriptionData.medications,
+          labInvestigations: prescriptionData.labInvestigations,
+          labResults: prescriptionData.labResults,
+          procedures: prescriptionData.procedures,
+          followUp: prescriptionData.followUp,
+          referral: prescriptionData.referral,
+          advice: prescriptionData.advice,
+          surgicalNotes: prescriptionData.notes?.surgicalNotes || '',
+          privateNotes: prescriptionData.notes?.privateNotes || '',
+          customSections: prescriptionData.customSections,
+          medicalConditions: prescriptionData.medicalConditions,
+          noRelevantHistory: prescriptionData.noRelevantHistory,
+        },
+      },
+    });
+  }, [patientId, prescriptionId, prescriptionData, navigate]);
 
   const pdfData = useMemo(() => prescriptionData || null, [prescriptionData]);
 
@@ -181,6 +211,17 @@ export default function AddPrescriptionPage() {
                   <>
                     <Button
                       fullWidth
+                      variant="contained"
+                      color="warning"
+                      startIcon={<EditIcon />}
+                      onClick={handleEditPrescription}
+                      sx={{ justifyContent: 'flex-start', py: 1, fontWeight: 600 }}
+                      disabled={!prescriptionData}
+                    >
+                      Edit Prescription
+                    </Button>
+                    <Button
+                      fullWidth
                       variant="outlined"
                       startIcon={<EditIcon />}
                       onClick={() => navigate(`/visit-details/${patientId}`)}
@@ -235,6 +276,7 @@ export default function AddPrescriptionPage() {
                     data={pdfData}
                     patientInfo={patientInfo}
                     dropdownOptions={dropdownOptions}
+                    printSettings={printSettings}
                     onPdfReady={handlePdfReady}
                   />
                 ) : (

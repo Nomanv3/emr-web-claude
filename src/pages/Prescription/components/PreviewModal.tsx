@@ -150,6 +150,7 @@ export default function PreviewModal({ open, onClose, onFinish }: PreviewModalPr
               data={prescriptionData}
               patientInfo={patientInfo}
               dropdownOptions={dropdownOptions}
+              printSettings={printEnabledSections}
               onPdfReady={handlePdfReady}
             />
           </Box>

@@ -112,8 +112,8 @@ export default function PrescriptionPdf({ data, patientInfo, dropdownOptions, pr
   const printSettingsRef = useRef(printSettings);
   printSettingsRef.current = printSettings;
 
-  // Stable key — only re-generate when data actually changes (by value)
-  const stableKey = dataKey(data);
+  // Stable key — only re-generate when data or printSettings actually changes (by value)
+  const stableKey = dataKey(data) + JSON.stringify(printSettings || {});
 
   const generatePdf = useCallback(async () => {
     const currentData = dataRef.current;
@@ -278,41 +278,45 @@ function buildContent(
   }
 
   // ── Vitals ──
-  const v = data.vitals;
-  const vitalParts: PdfContent[] = [];
-  if (v.height?.value) vitalParts.push({ text: `Ht: ${v.height.value} cm`, style: 'contentText' });
-  if (v.weight?.value) vitalParts.push({ text: `Wt: ${v.weight.value} kg`, style: 'contentText' });
-  if (v.bmi) vitalParts.push({ text: `BMI: ${v.bmi}`, style: 'contentText' });
-  if (v.bp?.systolic) vitalParts.push({ text: `BP: ${v.bp.systolic}/${v.bp.diastolic} mmHg`, style: 'contentText' });
-  if (v.pulse?.value) vitalParts.push({ text: `Pulse: ${v.pulse.value} bpm`, style: 'contentText' });
-  if (v.heartRate) vitalParts.push({ text: `HR: ${v.heartRate} bpm`, style: 'contentText' });
-  if (v.temp?.value) vitalParts.push({ text: `Temp: ${v.temp.value}°F`, style: 'contentText' });
-  if (v.spo2) vitalParts.push({ text: `SpO2: ${v.spo2}%`, style: 'contentText' });
-  if (v.rr) vitalParts.push({ text: `RR: ${v.rr}/min`, style: 'contentText' });
+  if (ps('vitals')) {
+    const v = data.vitals;
+    const vitalParts: PdfContent[] = [];
+    if (v.height?.value) vitalParts.push({ text: `Ht: ${v.height.value} cm`, style: 'contentText' });
+    if (v.weight?.value) vitalParts.push({ text: `Wt: ${v.weight.value} kg`, style: 'contentText' });
+    if (v.bmi) vitalParts.push({ text: `BMI: ${v.bmi}`, style: 'contentText' });
+    if (v.bp?.systolic) vitalParts.push({ text: `BP: ${v.bp.systolic}/${v.bp.diastolic} mmHg`, style: 'contentText' });
+    if (v.pulse?.value) vitalParts.push({ text: `Pulse: ${v.pulse.value} bpm`, style: 'contentText' });
+    if (v.heartRate) vitalParts.push({ text: `HR: ${v.heartRate} bpm`, style: 'contentText' });
+    if (v.temp?.value) vitalParts.push({ text: `Temp: ${v.temp.value}°F`, style: 'contentText' });
+    if (v.spo2) vitalParts.push({ text: `SpO2: ${v.spo2}%`, style: 'contentText' });
+    if (v.rr) vitalParts.push({ text: `RR: ${v.rr}/min`, style: 'contentText' });
 
-  if (vitalParts.length > 0) {
-    const vitalLine: PdfContent[] = [{ text: 'Vitals: ', style: 'sectionHeaderData' }];
-    vitalParts.forEach((vp, i) => {
-      if (i > 0) vitalLine.push({ text: '  |  ', style: 'contentTextSeparator' });
-      vitalLine.push(vp);
-    });
-    content.push({ text: vitalLine, margin: [0, 0, 0, 6] });
+    if (vitalParts.length > 0) {
+      const vitalLine: PdfContent[] = [{ text: 'Vitals: ', style: 'sectionHeaderData' }];
+      vitalParts.forEach((vp, i) => {
+        if (i > 0) vitalLine.push({ text: '  |  ', style: 'contentTextSeparator' });
+        vitalLine.push(vp);
+      });
+      content.push({ text: vitalLine, margin: [0, 0, 0, 6] });
+    }
   }
 
   // ── Medical History ──
-  const activeConditions = data.medicalConditions.filter(c => c.value === 'Y');
-  if (activeConditions.length > 0 && !data.noRelevantHistory) {
-    const histLine: PdfContent[] = [{ text: 'Medical History: ', style: 'sectionHeaderData' }];
-    activeConditions.forEach((c, i) => {
-      if (i > 0) histLine.push({ text: '  |  ', style: 'contentTextSeparator' });
-      histLine.push({ text: c.name, style: 'contentTextBold' });
-      if (c.since) histLine.push({ text: ` (since ${c.since})`, style: 'contentTextItalic' });
-    });
-    content.push({ text: histLine, margin: [0, 0, 0, 4] });
+  if (ps('patientMedicalHistory')) {
+    const activeConditions = data.medicalConditions.filter(c => c.value === 'Y');
+    if (activeConditions.length > 0 && !data.noRelevantHistory) {
+      const histLine: PdfContent[] = [{ text: 'Medical History: ', style: 'sectionHeaderData' }];
+      activeConditions.forEach((c, i) => {
+        if (i > 0) histLine.push({ text: '  |  ', style: 'contentTextSeparator' });
+        histLine.push({ text: c.name, style: 'contentTextBold' });
+        if (c.since) histLine.push({ text: ` (since ${c.since})`, style: 'contentTextItalic' });
+      });
+      content.push({ text: histLine, margin: [0, 0, 0, 4] });
+    }
   }
 
   // ── Symptoms ──
-  if (data.symptoms.length > 0) {
+  if (ps('symptoms') && data.symptoms.length > 0) {
     const symLine: PdfContent[] = [{ text: 'Chief Complaints: ', style: 'sectionHeaderData' }];
     data.symptoms.forEach((s, i) => {
       if (i > 0) symLine.push({ text: '  |  ', style: 'contentTextSeparator' });
@@ -325,7 +329,7 @@ function buildContent(
   }
 
   // ── Diagnosis ──
-  if (data.diagnoses.length > 0) {
+  if (ps('diagnosis') && data.diagnoses.length > 0) {
     const diagLine: PdfContent[] = [{ text: 'Diagnosis: ', style: 'sectionHeaderData' }];
     data.diagnoses.forEach((d, i) => {
       if (i > 0) diagLine.push({ text: '  |  ', style: 'contentTextSeparator' });
@@ -338,7 +342,7 @@ function buildContent(
   }
 
   // ── Examination Findings ──
-  if (data.examinationFindings.length > 0) {
+  if (ps('examinationFindings') && data.examinationFindings.length > 0) {
     const examLine: PdfContent[] = [{ text: 'Examination Findings: ', style: 'sectionHeaderData' }];
     data.examinationFindings.forEach((f, i) => {
       if (i > 0) examLine.push({ text: '  |  ', style: 'contentTextSeparator' });
@@ -361,7 +365,7 @@ function buildContent(
   });
 
   // ── Medications Table ──
-  if (data.medications.length > 0) {
+  if (ps('medication') && data.medications.length > 0) {
     const medDD = ddOpts?.medication;
     const headerRow = [
       { text: '#', style: 'tableHeader', alignment: 'center' as const },
@@ -409,7 +413,7 @@ function buildContent(
   const rightCol: PdfContent[] = [];
 
   // Procedures → left
-  if (data.procedures.length > 0) {
+  if (ps('procedures') && data.procedures.length > 0) {
     leftCol.push({ text: 'Procedures', style: 'sectionHeaderData', margin: [0, 0, 0, 2] });
     data.procedures.forEach(p => {
       leftCol.push({
@@ -425,7 +429,7 @@ function buildContent(
   }
 
   // Follow-Up → left
-  if (data.followUp) {
+  if (ps('followup') && data.followUp) {
     leftCol.push({ text: 'Follow-Up', style: 'sectionHeaderData', margin: [0, 0, 0, 2] });
     leftCol.push({
       text: [
@@ -437,13 +441,13 @@ function buildContent(
   }
 
   // Advice → left
-  if (data.advice) {
+  if (ps('advices') && data.advice) {
     leftCol.push({ text: 'Advice', style: 'sectionHeaderData', margin: [0, 0, 0, 2] });
     leftCol.push({ text: stripHtml(data.advice), style: 'contentText', margin: [0, 0, 0, 4] });
   }
 
   // Referral → left
-  if (data.referral?.doctorName) {
+  if (ps('referToDoctor') && data.referral?.doctorName) {
     leftCol.push({ text: 'Referral', style: 'sectionHeaderData', margin: [0, 0, 0, 2] });
     leftCol.push({
       text: [
@@ -456,7 +460,7 @@ function buildContent(
   }
 
   // Lab Investigations → right
-  if (data.labInvestigations.length > 0) {
+  if (ps('labTests') && data.labInvestigations.length > 0) {
     rightCol.push({ text: 'Lab Investigations', style: 'sectionHeaderData', margin: [0, 0, 0, 2] });
     data.labInvestigations.forEach(l => {
       rightCol.push({
@@ -473,7 +477,7 @@ function buildContent(
   }
 
   // Lab Results → right
-  if (data.labResults.length > 0) {
+  if (ps('labResults') && data.labResults.length > 0) {
     rightCol.push({ text: 'Lab Results', style: 'sectionHeaderData', margin: [0, 0, 0, 2] });
     const resultRows = [
       [
@@ -508,13 +512,13 @@ function buildContent(
   }
 
   // ── Notes ──
-  if (data.notes?.surgicalNotes) {
+  if (ps('notes') && data.notes?.surgicalNotes) {
     content.push({ text: 'Surgical Notes', style: 'sectionHeaderData', margin: [0, 4, 0, 2] });
     content.push({ text: stripHtml(data.notes.surgicalNotes), style: 'contentText', margin: [0, 0, 0, 4] });
   }
 
   // ── Custom Sections ──
-  if (data.customSections.length > 0) {
+  if (ps('customSection') && data.customSections.length > 0) {
     data.customSections.forEach(cs => {
       const items = cs.items.filter(it => it.key || it.value);
       if (items.length === 0) return;
@@ -582,6 +586,7 @@ export async function generateAndDownloadPdf(
   patientInfo: PatientInfo | null,
   dropdownOptions: DropdownOptions | null,
   filename: string,
+  printSettings?: Record<string, boolean> | null,
 ) {
   const [headerImg, footerImg] = await Promise.all([
     loadImageAsBase64('/header.png').catch(() => null),
@@ -592,7 +597,7 @@ export async function generateAndDownloadPdf(
   const imgWidth = 535;
   const hMargin = (pageWidth - imgWidth) / 2;
 
-  const content = buildContent(data, patientInfo, dropdownOptions);
+  const content = buildContent(data, patientInfo, dropdownOptions, printSettings || null);
   const docDefinition = {
     pageSize: 'A4' as const,
     pageMargins: [30, headerImg ? 130 : 40, 30, footerImg ? 90 : 40] as [number, number, number, number],

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Skeleton, Alert } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -53,11 +53,16 @@ function PrescriptionContent() {
     collectPayload, collectPrescriptionData, setIsSaving,
     sectionConfig, patient, isEditing, prescriptionId,
     clearAllPrescription, patientInfo, mainTemplates, applyTemplate,
-    dropdownOptions,
+    dropdownOptions, printEnabledSections,
   } = usePrescription();
 
-  // Check if editing from location state
-  const locationState = location.state as { prescriptionData?: Record<string, unknown>; isEditing?: boolean } | null;
+  // Check if editing or copying from location state
+  const locationState = location.state as {
+    prescriptionData?: Record<string, unknown>;
+    isEditing?: boolean;
+    copyToRx?: boolean;
+  } | null;
+  const loadedFromStateRef = useRef(false);
 
   // Fetch patient data
   const { data: patientData, isLoading: patientLoading, error: patientError } = useQuery({
@@ -72,12 +77,25 @@ function PrescriptionContent() {
     }
   }, [patientData, setPatient]);
 
+  // Load prescription data from location state (edit or copy-to-rx)
   useEffect(() => {
-    if (locationState?.isEditing && locationState.prescriptionData) {
+    if (loadedFromStateRef.current || !locationState?.prescriptionData) return;
+    loadedFromStateRef.current = true;
+
+    if (locationState.isEditing) {
       setIsEditing(true);
       setPrescriptionId((locationState.prescriptionData as Record<string, string>).prescriptionId || null);
       loadPrescription(locationState.prescriptionData as Record<string, unknown>);
+      toast.info('Editing prescription — make changes and save');
+    } else if (locationState.copyToRx) {
+      // Copy mode: load data but as a NEW prescription (no prescriptionId)
+      const { prescriptionId: _removed, ...dataWithoutId } = locationState.prescriptionData as Record<string, unknown>;
+      void _removed;
+      loadPrescription(dataWithoutId);
+      toast.info('Prescription data copied — review and save as new');
     }
+    // Clear location state to prevent re-loading on subsequent renders
+    window.history.replaceState({}, '');
   }, [locationState, setIsEditing, setPrescriptionId, loadPrescription]);
 
   // ── Save Prescription (just save, stay on page) ──
@@ -129,6 +147,7 @@ function PrescriptionContent() {
           patientInfo,
           prescriptionData,
           dropdownOptions,
+          printSettings: printEnabledSections,
         },
       });
     } catch {
@@ -138,7 +157,7 @@ function PrescriptionContent() {
     }
   }, [
     patientId, isEditing, prescriptionId, collectPayload, collectPrescriptionData,
-    navigate, setIsSaving, setPrescriptionId, patientInfo, dropdownOptions,
+    navigate, setIsSaving, setPrescriptionId, patientInfo, dropdownOptions, printEnabledSections,
   ]);
 
   // ── Finish from Preview Modal ──

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box, TextField, Button, Autocomplete, IconButton, Chip,
   Table, TableHead, TableRow, TableCell, TableBody,
@@ -6,6 +6,8 @@ import {
 import HealingIcon from '@mui/icons-material/Healing';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery } from '@tanstack/react-query';
 import SectionHeader from '../components/SectionHeader';
 import { usePrescription } from '../context/PrescriptionContext';
@@ -13,7 +15,7 @@ import { mastersApi } from '@/services/api';
 
 export default function ProceduresSection() {
   const {
-    procedures, addProcedure, removeProcedure,
+    procedures, addProcedure, removeProcedure, reorderProcedures,
     getTemplatesByType, addTemplate, deleteTemplate, applyTemplate,
   } = usePrescription();
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +36,14 @@ export default function ProceduresSection() {
     setSearchTerm('');
     setNotes('');
   };
+
+  const handleDragEnd = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(procedures);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    reorderProcedures(items);
+  }, [procedures, reorderProcedures]);
 
   const procedureTemplates = getTemplatesByType('procedure').map(t => ({
     templateId: t.templateId,
@@ -77,26 +87,56 @@ export default function ProceduresSection() {
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell sx={{ width: 40, p: 0.5 }} />
               <TableCell>Procedure</TableCell>
               <TableCell>Date</TableCell>
               <TableCell>Notes</TableCell>
               <TableCell sx={{ width: 50 }} />
             </TableRow>
           </TableHead>
-          <TableBody>
-            {procedures.map((p, i) => (
-              <TableRow key={i}>
-                <TableCell><Chip label={p.name} size="small" color="info" /></TableCell>
-                <TableCell>{p.date}</TableCell>
-                <TableCell>{p.notes || '-'}</TableCell>
-                <TableCell>
-                  <IconButton size="small" color="error" onClick={() => removeProcedure(i)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="procedures">
+              {(provided) => (
+                <TableBody ref={provided.innerRef} {...provided.droppableProps}>
+                  {procedures.map((p, i) => (
+                    <Draggable key={`proc-${i}`} draggableId={`proc-${i}`} index={i}>
+                      {(dragProvided, snapshot) => (
+                        <TableRow
+                          ref={dragProvided.innerRef}
+                          {...dragProvided.draggableProps}
+                          sx={{
+                            ...(snapshot.isDragging && {
+                              display: 'table',
+                              bgcolor: 'action.hover',
+                              boxShadow: 4,
+                            }),
+                          }}
+                        >
+                          <TableCell sx={{ width: 40, p: 0.5 }}>
+                            <Box
+                              {...dragProvided.dragHandleProps}
+                              sx={{ display: 'flex', alignItems: 'center', cursor: 'grab', color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                            >
+                              <DragIndicatorIcon fontSize="small" />
+                            </Box>
+                          </TableCell>
+                          <TableCell><Chip label={p.name} size="small" color="info" /></TableCell>
+                          <TableCell>{p.date}</TableCell>
+                          <TableCell>{p.notes || '-'}</TableCell>
+                          <TableCell>
+                            <IconButton size="small" color="error" onClick={() => removeProcedure(i)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </TableBody>
+              )}
+            </Droppable>
+          </DragDropContext>
         </Table>
       )}
     </SectionHeader>

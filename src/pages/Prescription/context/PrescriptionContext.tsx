@@ -140,6 +140,11 @@ export interface PrescriptionActions {
   reorderSymptoms: (symptoms: Symptom[]) => void;
   reorderMedications: (medications: Medication[]) => void;
   reorderDiagnoses: (diagnoses: Diagnosis[]) => void;
+  reorderExaminationFindings: (findings: ExaminationFinding[]) => void;
+  reorderLabInvestigations: (labs: LabInvestigation[]) => void;
+  reorderLabResults: (results: LabResult[]) => void;
+  reorderProcedures: (procedures: ProcedureEntry[]) => void;
+  reorderCustomSections: (sections: CustomSection[]) => void;
   refreshPrintSettings: () => Promise<void>;
 }
 
@@ -435,6 +440,11 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
   const reorderSymptoms = useCallback((symptoms: Symptom[]) => set('symptoms', symptoms), [set]);
   const reorderMedications = useCallback((medications: Medication[]) => set('medications', medications), [set]);
   const reorderDiagnoses = useCallback((diagnoses: Diagnosis[]) => set('diagnoses', diagnoses), [set]);
+  const reorderExaminationFindings = useCallback((findings: ExaminationFinding[]) => set('examinationFindings', findings), [set]);
+  const reorderLabInvestigations = useCallback((labs: LabInvestigation[]) => set('labInvestigations', labs), [set]);
+  const reorderLabResults = useCallback((results: LabResult[]) => set('labResults', results), [set]);
+  const reorderProcedures = useCallback((procedures: ProcedureEntry[]) => set('procedures', procedures), [set]);
+  const reorderCustomSections = useCallback((sections: CustomSection[]) => set('customSections', sections), [set]);
 
   // ─── Value ────────────────────────────────────────────────────────
   const value = useMemo<PrescriptionContextValue>(() => ({
@@ -457,7 +467,9 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     collectPrescriptionData, submitPrescription, updatePrescriptionApi,
     clearAllPrescription, addTemplate, deleteTemplate: deleteTemplateAction,
     applyTemplate, getTemplatesByType, savePrintSettings,
-    reorderSymptoms, reorderMedications, reorderDiagnoses, refreshPrintSettings,
+    reorderSymptoms, reorderMedications, reorderDiagnoses,
+    reorderExaminationFindings, reorderLabInvestigations, reorderLabResults,
+    reorderProcedures, reorderCustomSections, refreshPrintSettings,
   }), [
     state, setPatient, setLanguage, setActiveSection, setIsEditing, setIsSaving, setPrescriptionId,
     updateVitals, addSymptom, removeSymptom, updateSymptom,
@@ -473,7 +485,9 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     collectPrescriptionData, submitPrescription, updatePrescriptionApi,
     clearAllPrescription, addTemplate, deleteTemplateAction,
     applyTemplate, getTemplatesByType, savePrintSettings,
-    reorderSymptoms, reorderMedications, reorderDiagnoses, refreshPrintSettings,
+    reorderSymptoms, reorderMedications, reorderDiagnoses,
+    reorderExaminationFindings, reorderLabInvestigations, reorderLabResults,
+    reorderProcedures, reorderCustomSections, refreshPrintSettings,
   ]);
 
   return <PrescriptionContext.Provider value={value}>{children}</PrescriptionContext.Provider>;

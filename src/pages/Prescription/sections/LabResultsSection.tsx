@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box, TextField, Button, IconButton, Chip, Grid, Autocomplete,
   Table, TableHead, TableRow, TableCell, TableBody, MenuItem,
@@ -6,6 +6,8 @@ import {
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery } from '@tanstack/react-query';
 import SectionHeader from '../components/SectionHeader';
 import { usePrescription } from '../context/PrescriptionContext';
@@ -15,9 +17,7 @@ import type { LabResult } from '@/types';
 const FALLBACK_INTERPRETATIONS = ['Normal', 'Abnormal', 'Critical'];
 
 export default function LabResultsSection() {
-  const { labResults, addLabResult, removeLabResult, dropdownOptions } = usePrescription();
-  // DropdownOptions doesn't currently include labresult interpretations;
-  // use backend options if they become available, otherwise fall back to hardcoded list
+  const { labResults, addLabResult, removeLabResult, reorderLabResults, dropdownOptions } = usePrescription();
   const interpretationOpts = (dropdownOptions as Record<string, Record<string, { dropdown_option_id: number; option_value: string }[]>> | null)
     ?.labresult?.interpretation;
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,6 +45,14 @@ export default function LabResultsSection() {
     setNewResult({ testName: '', reading: '', unit: '', normalRange: '', interpretation: 'Normal', date: '', notes: '' });
     setSearchTerm('');
   };
+
+  const handleDragEnd = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(labResults);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    reorderLabResults(items);
+  }, [labResults, reorderLabResults]);
 
   return (
     <SectionHeader id="labResults" title="Lab Results" icon={<AssessmentIcon />} itemCount={labResults.length}>
@@ -97,6 +105,7 @@ export default function LabResultsSection() {
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell sx={{ width: 40, p: 0.5 }} />
               <TableCell>Test</TableCell>
               <TableCell>Reading</TableCell>
               <TableCell>Unit</TableCell>
@@ -105,28 +114,57 @@ export default function LabResultsSection() {
               <TableCell sx={{ width: 50 }} />
             </TableRow>
           </TableHead>
-          <TableBody>
-            {labResults.map((r, i) => (
-              <TableRow key={i}>
-                <TableCell>{r.testName}</TableCell>
-                <TableCell><strong>{r.reading}</strong></TableCell>
-                <TableCell>{r.unit}</TableCell>
-                <TableCell>{r.normalRange}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={r.interpretation}
-                    size="small"
-                    color={r.interpretation === 'Normal' ? 'success' : r.interpretation === 'Critical' ? 'error' : 'warning'}
-                  />
-                </TableCell>
-                <TableCell>
-                  <IconButton size="small" color="error" onClick={() => removeLabResult(i)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="labResults">
+              {(provided) => (
+                <TableBody ref={provided.innerRef} {...provided.droppableProps}>
+                  {labResults.map((r, i) => (
+                    <Draggable key={`labr-${i}`} draggableId={`labr-${i}`} index={i}>
+                      {(dragProvided, snapshot) => (
+                        <TableRow
+                          ref={dragProvided.innerRef}
+                          {...dragProvided.draggableProps}
+                          sx={{
+                            ...(snapshot.isDragging && {
+                              display: 'table',
+                              bgcolor: 'action.hover',
+                              boxShadow: 4,
+                            }),
+                          }}
+                        >
+                          <TableCell sx={{ width: 40, p: 0.5 }}>
+                            <Box
+                              {...dragProvided.dragHandleProps}
+                              sx={{ display: 'flex', alignItems: 'center', cursor: 'grab', color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                            >
+                              <DragIndicatorIcon fontSize="small" />
+                            </Box>
+                          </TableCell>
+                          <TableCell>{r.testName}</TableCell>
+                          <TableCell><strong>{r.reading}</strong></TableCell>
+                          <TableCell>{r.unit}</TableCell>
+                          <TableCell>{r.normalRange}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={r.interpretation}
+                              size="small"
+                              color={r.interpretation === 'Normal' ? 'success' : r.interpretation === 'Critical' ? 'error' : 'warning'}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <IconButton size="small" color="error" onClick={() => removeLabResult(i)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </TableBody>
+              )}
+            </Droppable>
+          </DragDropContext>
         </Table>
       )}
     </SectionHeader>
