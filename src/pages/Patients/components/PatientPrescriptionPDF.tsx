@@ -62,6 +62,7 @@ export default function PatientPrescriptionPDF({ prescription, patient, open, on
       }
       return {
         name: `${patient.salutation ? patient.salutation + '. ' : ''}${patient.name}`,
+        uhid: patient.uhid || '',
         age: ageDisplay,
         gender: genderMap[patient.gender] || patient.gender,
         phone: patient.phone || '',

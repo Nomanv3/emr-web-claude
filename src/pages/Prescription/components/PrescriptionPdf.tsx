@@ -203,7 +203,16 @@ export default function PrescriptionPdf({ data, patientInfo, dropdownOptions, pr
 
       const blobUrl = URL.createObjectURL(blob);
       setPdfUrl(blobUrl);
-      onPdfReadyRef.current?.(blobUrl);
+
+      // Emit a real base64 data URL (not the blob: URL) so callers can upload
+      // the PDF bytes directly. The iframe still uses the blob URL above.
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      onPdfReadyRef.current?.(dataUrl);
       setLoading(false);
     } catch (e) {
       console.error('[PrescriptionPdf] Generation error:', e);

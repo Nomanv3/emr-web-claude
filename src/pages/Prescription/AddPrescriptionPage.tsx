@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import PrescriptionPdf, { downloadPdfFromUrl } from './components/PrescriptionPdf';
 import type { PrescriptionPdfData } from './components/PrescriptionPdf';
 import type { PatientInfo, DropdownOptions, PrescriptionLanguage } from '@/types';
+import { whatsappApi } from '@/services/api';
 
 const MotionBox = motion.create(Box);
 
@@ -45,6 +46,7 @@ export default function AddPrescriptionPage() {
 
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
+  const [sharingWhatsapp, setSharingWhatsapp] = useState(false);
 
   const handlePdfReady = useCallback((dataUrl: string) => {
     setPdfDataUrl(dataUrl);
@@ -62,27 +64,83 @@ export default function AddPrescriptionPage() {
   }, [pdfDataUrl, patientInfo]);
 
   const handlePrint = useCallback(() => {
-    if (pdfDataUrl) {
-      const printWindow = window.open(pdfDataUrl, '_blank');
+    if (!pdfDataUrl) {
+      window.print();
+      return;
+    }
+    // Chrome blocks window.open() on data: URLs — convert to a blob URL first.
+    try {
+      const [meta, b64] = pdfDataUrl.split(',');
+      const mime = /data:(.*?);base64/.exec(meta)?.[1] || 'application/pdf';
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      const printWindow = window.open(blobUrl, '_blank');
       if (printWindow) {
         printWindow.addEventListener('load', () => printWindow.print());
       }
-    } else {
+      // Revoke after giving the new window time to load
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (e) {
+      console.error('[handlePrint] failed:', e);
       window.print();
     }
   }, [pdfDataUrl]);
 
-  const handleShare = useCallback(() => {
+  const handleShare = useCallback(async () => {
     if (!patientInfo?.phone) {
       toast.info('No patient phone number available');
       return;
     }
-    const phone = patientInfo.phone.replace(/\D/g, '');
-    const msg = encodeURIComponent(
-      `Dear ${patientInfo.name}, your prescription from EMR Healthcare is ready. Thank you for your visit.`
-    );
-    window.open(`https://wa.me/${phone.startsWith('91') ? phone : '91' + phone}?text=${msg}`, '_blank');
-  }, [patientInfo]);
+    if (!pdfDataUrl) {
+      toast.error('PDF is still generating, please wait...');
+      return;
+    }
+    if (sharingWhatsapp) return;
+
+    setSharingWhatsapp(true);
+    const toastId = toast.loading('Uploading prescription PDF...');
+    try {
+      // 1) Upload PDF to backend → get public URL
+      const nameForFile = patientInfo.name?.replace(/\s+/g, '_') || 'Patient';
+      const uploadResp = await whatsappApi.uploadPrescriptionPdf({
+        pdfBase64: pdfDataUrl,
+        filename: `Prescription_${nameForFile}.pdf`,
+      });
+      const publicUrl = uploadResp.data?.url;
+      if (!publicUrl) throw new Error('Upload did not return a URL');
+
+      // 2) Open api.whatsapp.com/send — same flow as eka.care
+      const phone = patientInfo.phone.replace(/\D/g, '');
+      const fullPhone = phone.length === 10 ? `91${phone}` : phone;
+      const patientName = patientInfo.name || 'Patient';
+
+      const message =
+        `Your Prescription Are In!\n\n` +
+        `Hello ${patientName},\n\n` +
+        `Your Prescription results are available for review. Please find the PDF file attached to access your results:\n` +
+        `${publicUrl}\n\n` +
+        `Please feel free to reach us if you have any questions or need further assistance.\n\n` +
+        `Best regards,\nAgentQure Team`;
+
+      window.open(
+        `https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(message)}`,
+        '_blank',
+      );
+
+      toast.success('WhatsApp opened — send the message to share', { id: toastId });
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data
+              ?.error?.message
+          : undefined;
+      toast.error(msg || 'Failed to share via WhatsApp', { id: toastId });
+    } finally {
+      setSharingWhatsapp(false);
+    }
+  }, [patientInfo, pdfDataUrl, sharingWhatsapp]);
 
   const handleEditPrescription = useCallback(() => {
     if (!patientId || !prescriptionData) return;
@@ -182,7 +240,7 @@ export default function AddPrescriptionPage() {
                 />
                 <ActionCard
                   icon={<WhatsAppIcon sx={{ fontSize: 28, color: '#25D366' }} />}
-                  title="Share via WhatsApp"
+                  title={sharingWhatsapp ? 'Sending on WhatsApp...' : 'Share via WhatsApp'}
                   subtitle={patientInfo?.phone ? `Send to ${patientInfo.phone}` : 'No phone available'}
                   onClick={handleShare}
                 />

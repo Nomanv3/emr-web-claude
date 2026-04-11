@@ -85,6 +85,8 @@ export const patientApi = {
     search?: string;
     page?: number;
     limit?: number;
+    dateFrom?: string;
+    dateTo?: string;
   }) =>
     api.get<ApiResponse<{ patients: Patient[]; total: number; page: number; limit: number }>>(
       '/patients',
@@ -94,7 +96,7 @@ export const patientApi = {
   getPatientById: (patientId: string) =>
     api.get<ApiResponse<Patient>>(`/patients/${patientId}`).then((r) => r.data),
 
-  createPatient: (patient: Partial<Patient>) =>
+  createPatient: (patient: Partial<Patient> & Record<string, unknown>) =>
     api.post<ApiResponse<{ patientId: string; uhid: string }>>('/patients', patient).then((r) => r.data),
 
   updatePatient: (patientId: string, data: Partial<Patient>) =>
@@ -227,7 +229,7 @@ export const prescriptionApi = {
       ageDisplay: string;
       genderDisplay: string;
       phoneDisplay: string;
-      rawData: { address: string };
+      rawData: { address: string; uhid?: string };
       lockedVitals: PrescriptionVitals | null;
       medicalHistory: { conditions?: Array<{ name: string; value: string; since?: string }>; noHistory?: boolean } | null;
     }>>('/patientDetail-history', { params: { id: patientId } }).then((r) => r.data),
@@ -352,6 +354,19 @@ export const printSettingsApi = {
 
   saveSettings: (settings: Record<string, unknown>) =>
     api.post<ApiResponse<null>>('/printSettings', settings).then((r) => r.data),
+};
+
+// ─── WhatsApp Share API ──────────────────────────────────────────────
+
+export const whatsappApi = {
+  // Upload a prescription PDF (base64) and get back a public URL.
+  uploadPrescriptionPdf: (payload: { pdfBase64: string; filename?: string }) =>
+    api
+      .post<ApiResponse<{ url: string; filename: string }>>(
+        '/upload-prescription-pdf',
+        payload,
+      )
+      .then((r) => r.data),
 };
 
 export default api;

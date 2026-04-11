@@ -97,16 +97,16 @@ export default function QueueTable({ queue, isLoading, onUpdateStatus }: QueueTa
     <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
       <Table>
         <TableHead>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 600 }}>Token #</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Patient Name</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>UHID</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Time Slot</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Services</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Payment</TableCell>
-            <TableCell sx={{ fontWeight: 600 }} align="right">
+          <TableRow sx={{ bgcolor: '#0D7C66' }}>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Token #</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Patient Name</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>UHID</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Type</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Time Slot</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Services</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Status</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Payment</TableCell>
+            <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }} align="right">
               Actions
             </TableCell>
           </TableRow>
@@ -133,8 +133,8 @@ export default function QueueTable({ queue, isLoading, onUpdateStatus }: QueueTa
                   key={entry.queueId}
                   hover
                   sx={{
-                    '&:last-child td': { border: 0 },
                     cursor: 'pointer',
+                    '& td': { borderBottom: '1px solid', borderColor: 'divider' },
                   }}
                 >
                   <TableCell>
@@ -258,18 +258,16 @@ export default function QueueTable({ queue, isLoading, onUpdateStatus }: QueueTa
                   <TableCell align="right">
                     <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                       {entry.status === 'Waiting' && (
-                        <Tooltip title="Start Visit">
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="primary"
-                            startIcon={<StartIcon />}
-                            onClick={() => navigate(`/visit-details/${entry.patientId}`)}
-                            sx={{ textTransform: 'none', fontSize: '0.8rem' }}
-                          >
-                            Start
-                          </Button>
-                        </Tooltip>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          startIcon={<StartIcon />}
+                          onClick={() => navigate(`/visit-details/${entry.patientId}`)}
+                          sx={{ textTransform: 'none', fontSize: '0.8rem' }}
+                        >
+                          Start
+                        </Button>
                       )}
                       {entry.status === 'Ongoing' && (
                         <Tooltip title="Complete Visit">
@@ -283,15 +281,13 @@ export default function QueueTable({ queue, isLoading, onUpdateStatus }: QueueTa
                         </Tooltip>
                       )}
                       {(entry.status === 'Waiting' || entry.status === 'Ongoing') && (
-                        <Tooltip title="Cancel">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => onUpdateStatus(entry.queueId, 'Cancelled')}
-                          >
-                            <CancelIcon />
-                          </IconButton>
-                        </Tooltip>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => onUpdateStatus(entry.queueId, 'Cancelled')}
+                        >
+                          <CancelIcon />
+                        </IconButton>
                       )}
                     </Box>
                   </TableCell>

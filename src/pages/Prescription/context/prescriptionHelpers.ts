@@ -82,6 +82,7 @@ export async function fetchPatientDetail(patientId: string): Promise<{
     return {
       patientInfo: {
         name: d.fullName || '',
+        uhid: d.rawData?.uhid || '',
         age: d.ageDisplay || '',
         gender: d.genderDisplay || '',
         phone: d.phoneDisplay || '',

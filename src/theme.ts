@@ -174,12 +174,25 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiTableCell-head': {
-            fontWeight: 600,
-            backgroundColor: '#F4F6F9',
-            color: '#637381',
+            fontWeight: 700,
+            backgroundColor: '#0D7C66',
+            color: '#FFFFFF',
             fontSize: '0.8rem',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
+            borderBottom: '2px solid #E5E9F0',
+          },
+        },
+      },
+    },
+    MuiTableBody: {
+      styleOverrides: {
+        root: {
+          '& .MuiTableRow-root': {
+            '& .MuiTableCell-root': {
+              borderBottom: '1px solid #E5E9F0',
+              padding: '12px 16px',
+            },
           },
         },
       },

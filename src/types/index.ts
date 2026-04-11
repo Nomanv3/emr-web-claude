@@ -663,6 +663,7 @@ export interface PrescriptionLabResult {
 
 export interface PatientInfo {
   name: string;
+  uhid: string;
   age: string;
   gender: string;
   phone: string;

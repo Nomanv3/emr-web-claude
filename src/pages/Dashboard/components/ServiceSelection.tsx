@@ -414,7 +414,7 @@ export default function ServiceSelection({
         {/* Gradient Header */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #1565c0 0%, #1e88e5 100%)',
+            background: 'linear-gradient(135deg, #0D7C66 0%, #17B890 100%)',
             px: 3,
             pt: 2.5,
             pb: 2,
@@ -488,7 +488,7 @@ export default function ServiceSelection({
             {!showPaymentSection && (
               <Button
                 variant="contained"
-                color="success"
+                color="primary"
                 size="small"
                 fullWidth
                 startIcon={<PaymentIcon />}
@@ -523,6 +523,7 @@ export default function ServiceSelection({
                 icon={<RupeeIcon sx={{ fontSize: '0.85rem !important' }} />}
                 label={`Total: ₹${localTotalAmount.toLocaleString('en-IN')}`}
                 size="small"
+                color="primary"
                 variant="outlined"
                 sx={{ fontWeight: 700 }}
               />
@@ -530,14 +531,14 @@ export default function ServiceSelection({
                 <Chip
                   label={`Paid: ₹${localTotalPaid.toLocaleString('en-IN')}`}
                   size="small"
-                  color="success"
+                  color="primary"
                   sx={{ fontWeight: 700 }}
                 />
               )}
               <Chip
                 label={`Balance: ₹${Math.max(0, localBalance).toLocaleString('en-IN')}`}
                 size="small"
-                color={localBalance <= 0 ? 'success' : 'error'}
+                color={localBalance <= 0 ? 'primary' : 'error'}
                 variant="outlined"
                 sx={{ fontWeight: 700 }}
               />
@@ -609,7 +610,7 @@ export default function ServiceSelection({
                 {/* Confirm payment button */}
                 <Button
                   variant="contained"
-                  color="success"
+                  color="primary"
                   size="small"
                   fullWidth
                   onClick={handleConfirmPayment}

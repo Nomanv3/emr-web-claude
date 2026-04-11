@@ -23,6 +23,7 @@ import {
   CurrencyRupee as RupeeIcon,
   DirectionsWalk as WalkInIcon,
   EventNote as ScheduleIcon,
+  PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ import { patientApi, appointmentApi, queueApi, invoiceApi, paymentApi } from '@/
 import { useAuth } from '@/context/AuthContext';
 import type { Patient, TimeSlot, ServiceDetail, SelectedService, PaymentSummary } from '@/types';
 import ServiceSelection from './ServiceSelection';
+import RegisterPatientDialog from '@/pages/Patients/components/RegisterPatientDialog';
 
 type BookingMode = 'checkin' | 'appointment';
 
@@ -62,6 +64,7 @@ export default function BookingPanel({
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingMode, setBookingMode] = useState<BookingMode>('checkin');
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
 
   const isBookingToday = bookingDate === new Date().toISOString().split('T')[0];
 
@@ -103,6 +106,22 @@ export default function BookingPanel({
   });
 
   const patients = patientsData?.data ?? [];
+
+  // Sentinel for "Add Patient" row shown at the bottom of the dropdown.
+  const ADD_PATIENT_SENTINEL: Patient = {
+    patientId: '__ADD_NEW__',
+    name: '',
+    uhid: '',
+    phone: '',
+  } as Patient;
+
+  // Show dropdown only when typing AND no patient selected yet
+  const autocompleteOpen = searchTerm.trim().length >= 2 && !selectedPatient;
+
+  // Only show "Add Patient" option when user is actively typing
+  const patientOptions: Patient[] = searchTerm.trim().length >= 2
+    ? [...patients, ADD_PATIENT_SENTINEL]
+    : patients;
 
   // Only fetch slots in appointment mode
   const needsSlots = bookingMode === 'appointment';
@@ -454,15 +473,29 @@ export default function BookingPanel({
 
         {/* Patient search */}
         <Autocomplete
-          options={patients}
-          getOptionLabel={(option) => `${option.name} - ${option.uhid}`}
+          options={patientOptions}
+          open={autocompleteOpen}
+          getOptionLabel={(option) =>
+            option.patientId === '__ADD_NEW__' ? '' : `${option.name} - ${option.uhid}`
+          }
           inputValue={searchTerm}
           onInputChange={handleSearchChange}
           value={selectedPatient}
-          onChange={(_, val) => setSelectedPatient(val)}
+          onChange={(_, val) => {
+            if (val && val.patientId === '__ADD_NEW__') {
+              setRegisterDialogOpen(true);
+              return;
+            }
+            setSelectedPatient(val);
+            if (val) {
+              setSearchTerm('');
+              setDebouncedSearch('');
+              toast.success(`Selected: ${val.name} (${val.uhid})`);
+            }
+          }}
           loading={patientsLoading}
-          noOptionsText={debouncedSearch.length < 2 ? 'Type to search...' : 'No patients found'}
           filterOptions={(x) => x}
+          isOptionEqualToValue={(opt, val) => opt.patientId === val.patientId}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -483,6 +516,31 @@ export default function BookingPanel({
           )}
           renderOption={(props, option) => {
             const { key, ...rest } = props;
+            if (option.patientId === '__ADD_NEW__') {
+              return (
+                <Box
+                  component="li"
+                  key={key}
+                  {...rest}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    color: 'primary.main',
+                    fontWeight: 600,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <PersonAddIcon fontSize="small" />
+                  <Typography variant="body2" fontWeight={600}>
+                    {searchTerm.trim()
+                      ? `Add "${searchTerm.trim()}" as new patient`
+                      : 'Add new patient'}
+                  </Typography>
+                </Box>
+              );
+            }
             return (
               <Box
                 component="li"
@@ -727,6 +785,20 @@ export default function BookingPanel({
           {getSubmitLabel()}
         </Button>
       </Box>
+
+      {/* Register dialog — opened from the "Add patient" row in the search dropdown */}
+      <RegisterPatientDialog
+        open={registerDialogOpen}
+        onClose={() => {
+          setRegisterDialogOpen(false);
+          // Re-run the search so the new patient appears
+          if (debouncedSearch.length >= 2) {
+            queryClient.invalidateQueries({ queryKey: ['patients-search'] });
+          }
+        }}
+        initialName={searchTerm.trim() && !/^\d+$/.test(searchTerm.trim()) ? searchTerm.trim() : undefined}
+        initialPhone={/^\d{10}$/.test(searchTerm.trim()) ? searchTerm.trim() : undefined}
+      />
     </Drawer>
   );
 }

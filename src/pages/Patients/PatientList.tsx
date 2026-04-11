@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -15,16 +15,13 @@ import {
   Chip,
   Avatar,
   Skeleton,
-  InputAdornment,
 } from '@mui/material';
 import {
-  Search as SearchIcon,
   PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import debounce from 'lodash.debounce';
 
 import { patientApi } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
@@ -62,33 +59,23 @@ function SkeletonRows() {
 export default function PatientList() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [registerOpen, setRegisterOpen] = useState(false);
-
-  const debouncedSetSearch = useCallback(
-    debounce((val: string) => {
-      setDebouncedSearch(val);
-      setPage(0);
-    }, 300),
-    [],
-  );
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
-    debouncedSetSearch(e.target.value);
-  };
+  const [dateFrom, setDateFrom] = useState(sevenDaysAgo);
+  const [dateTo, setDateTo] = useState(todayStr);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['patients', debouncedSearch, page, rowsPerPage, user?.organizationId],
+    queryKey: ['patients', page, rowsPerPage, user?.organizationId, dateFrom, dateTo],
     queryFn: () =>
       patientApi.getPatients({
         organizationId: user!.organizationId,
-        search: debouncedSearch || undefined,
         page: page + 1,
         limit: rowsPerPage,
+        dateFrom,
+        dateTo,
       }),
     enabled: !!user?.organizationId,
     staleTime: 30_000,
@@ -121,22 +108,25 @@ export default function PatientList() {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField
-            placeholder="Search by name, phone, UHID..."
-            value={search}
-            onChange={handleSearchChange}
-            sx={{ width: { xs: '100%', sm: 300 } }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <TextField
+              label="From"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ width: 160 }}
+            />
+            <TextField
+              label="To"
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ width: 160 }}
+            />
+          </Box>
           <Button
             variant="contained"
             startIcon={<PersonAddIcon />}
@@ -156,14 +146,14 @@ export default function PatientList() {
         <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell>UHID</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Age / Gender</TableCell>
-                <TableCell>Phone</TableCell>
-                <TableCell>Blood Group</TableCell>
-                <TableCell>Tags</TableCell>
-                <TableCell>Registered On</TableCell>
+              <TableRow sx={{ bgcolor: '#0D7C66' }}>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>UHID</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Name</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Age / Gender</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Phone</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Blood Group</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Tags</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: '#fff', borderBottom: '2px solid', borderColor: 'divider' }}>Registered On</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -173,7 +163,7 @@ export default function PatientList() {
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                     <Typography color="text.secondary">
-                      {debouncedSearch ? 'No patients match your search.' : 'No patients registered yet.'}
+                      No patients found for the selected date range.
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -182,7 +172,10 @@ export default function PatientList() {
                   <TableRow
                     key={patient.patientId}
                     hover
-                    sx={{ cursor: 'pointer' }}
+                    sx={{
+                      cursor: 'pointer',
+                      '& td': { borderBottom: '1px solid', borderColor: 'divider' },
+                    }}
                     onClick={() => navigate(`/patient/${patient.patientId}`)}
                   >
                     <TableCell>
