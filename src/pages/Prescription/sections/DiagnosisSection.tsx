@@ -13,6 +13,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import SectionHeader from '../components/SectionHeader';
+import InlineEditableName, { type SearchOption } from '../components/InlineEditableName';
 import { usePrescription } from '../context/PrescriptionContext';
 import { mastersApi } from '@/services/api';
 import { useFrequentlyUsed } from '@/hooks/useFrequentlyUsed';
@@ -111,6 +112,15 @@ export default function DiagnosisSection() {
   };
 
   const showFrequentDropdown = showFrequent && !searchTerm && frequentDiagnoses.length > 0;
+
+  const searchDiagnosisName = useCallback(async (q: string): Promise<SearchOption[]> => {
+    const res = await mastersApi.getDiagnoses(q);
+    return (res.data || []).map(d => ({
+      label: d.description,
+      secondary: d.icdCode || undefined,
+      payload: { icdCode: d.icdCode, description: d.description },
+    }));
+  }, []);
 
   return (
     <SectionHeader
@@ -226,7 +236,19 @@ export default function DiagnosisSection() {
                               <DragIndicatorIcon fontSize="small" />
                             </Box>
                           </TableCell>
-                          <TableCell>{d.description}</TableCell>
+                          <TableCell>
+                            <InlineEditableName
+                              value={d.description}
+                              secondary={d.icdCode}
+                              searchFn={searchDiagnosisName}
+                              placeholder="Search diagnosis..."
+                              onRename={(name) => updateDiagnosis(i, { ...d, description: name })}
+                              onReplace={(opt) => {
+                                const p = opt.payload as { icdCode: string; description: string } | undefined;
+                                updateDiagnosis(i, { ...d, icdCode: p?.icdCode || '', description: p?.description || opt.label });
+                              }}
+                            />
+                          </TableCell>
                           <TableCell sx={{ minWidth: 160 }}>
                             <TextField
                               select value={d.type} size="small" fullWidth

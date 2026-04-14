@@ -12,6 +12,8 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  Menu,
+  MenuItem,
   useMediaQuery,
   useTheme,
   Dialog,
@@ -22,13 +24,13 @@ import {
 } from '@mui/material';
 import {
   Warning as WarningIcon,
+  Logout as LogoutIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import {
   Dashboard as DashboardIcon,
   People as PeopleIcon,
-  BarChart as BarChartIcon,
   Payment as PaymentIcon,
-  Person as PersonIcon,
   ChevronLeft as ChevronLeftIcon,
   LocalHospital as ClinicIcon,
 } from '@mui/icons-material';
@@ -40,11 +42,9 @@ const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 72;
 
 const navItems = [
-  { label: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+  { label: 'Queue', icon: <DashboardIcon />, path: '/' },
   { label: 'Patients', icon: <PeopleIcon />, path: '/patients' },
-  { label: 'Analytics', icon: <BarChartIcon />, path: '/analytics' },
   { label: 'Payments', icon: <PaymentIcon />, path: '/payments' },
-  { label: 'Profile', icon: <PersonIcon />, path: '/profile' },
 ];
 
 const MotionBox = motion.create(Box);
@@ -52,13 +52,28 @@ const MotionBox = motion.create(Box);
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { sidebarOpen, toggleSidebar, setSidebarOpen } = useAppContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Navigation guard for bulk import
   const [guardDialog, setGuardDialog] = useState<{ open: boolean; targetPath: string }>({ open: false, targetPath: '' });
+
+  // Profile dropdown menu
+  const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
+  const profileMenuOpen = Boolean(profileAnchor);
+
+  const handleLogout = useCallback(() => {
+    setProfileAnchor(null);
+    logout();
+    navigate('/login');
+  }, [logout, navigate]);
+
+  const handleImportData = useCallback(() => {
+    setProfileAnchor(null);
+    navigate('/profile');
+  }, [navigate]);
 
   const handleNavigate = useCallback((path: string) => {
     const isImportActive = (window as unknown as Record<string, unknown>).__bulkImportActive;
@@ -245,47 +260,81 @@ export default function Sidebar() {
 
       <Divider sx={{ mx: sidebarOpen ? 2 : 1.5 }} />
 
-      {/* User info */}
-      <Box
-        sx={{
-          p: sidebarOpen ? 2 : 1.5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: sidebarOpen ? 'flex-start' : 'center',
-          gap: 1.5,
-        }}
-      >
-        <Avatar
+      {/* User info (clickable — opens profile menu) */}
+      <Tooltip title={sidebarOpen ? '' : (user?.name ?? 'User')} placement="right" arrow>
+        <Box
+          onClick={(e) => setProfileAnchor(e.currentTarget)}
           sx={{
-            width: 36,
-            height: 36,
-            bgcolor: 'primary.main',
-            fontSize: '0.85rem',
-            flexShrink: 0,
+            p: sidebarOpen ? 2 : 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: sidebarOpen ? 'flex-start' : 'center',
+            gap: 1.5,
+            cursor: 'pointer',
+            transition: 'background-color 200ms ease',
+            '&:hover': { bgcolor: 'action.hover' },
           }}
         >
-          {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
-        </Avatar>
-        {sidebarOpen && (
-          <MotionBox
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2 }}
-            sx={{ overflow: 'hidden', minWidth: 0 }}
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: 'primary.main',
+              fontSize: '0.85rem',
+              flexShrink: 0,
+            }}
           >
-            <Typography variant="body2" fontWeight={600} noWrap>
-              {user?.name ?? 'User'}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: 'text.secondary', textTransform: 'capitalize' }}
-              noWrap
+            {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
+          </Avatar>
+          {sidebarOpen && (
+            <MotionBox
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2 }}
+              sx={{ overflow: 'hidden', minWidth: 0 }}
             >
-              {user?.role ?? 'Doctor'}
-            </Typography>
-          </MotionBox>
-        )}
-      </Box>
+              <Typography variant="body2" fontWeight={600} noWrap>
+                {user?.name ?? 'User'}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', textTransform: 'capitalize' }}
+                noWrap
+              >
+                {user?.role ?? 'Doctor'}
+              </Typography>
+            </MotionBox>
+          )}
+        </Box>
+      </Tooltip>
+
+      <Menu
+        anchorEl={profileAnchor}
+        open={profileMenuOpen}
+        onClose={() => setProfileAnchor(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        slotProps={{
+          paper: {
+            sx: {
+              minWidth: 200,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              border: '1px solid',
+              borderColor: 'divider',
+            },
+          },
+        }}
+      >
+        <MenuItem onClick={handleImportData} sx={{ py: 1.25, fontSize: '0.875rem' }}>
+          <ListItemIcon><CloudUploadIcon fontSize="small" /></ListItemIcon>
+          Import Data
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleLogout} sx={{ py: 1.25, fontSize: '0.875rem', color: 'error.main' }}>
+          <ListItemIcon><LogoutIcon fontSize="small" sx={{ color: 'error.main' }} /></ListItemIcon>
+          Logout
+        </MenuItem>
+      </Menu>
     </Box>
   );
 

@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box, Tabs, Tab, Typography, Chip, IconButton, Menu, MenuItem,
   ListItemText, Tooltip, Badge, alpha, TextField, InputAdornment,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, CircularProgress, Divider,
 } from '@mui/material';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
 import SickIcon from '@mui/icons-material/Sick';
@@ -22,8 +23,12 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import EditIcon from '@mui/icons-material/Edit';
 import PhoneIcon from '@mui/icons-material/Phone';
 import SearchIcon from '@mui/icons-material/Search';
+import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { usePrescription, type SectionId } from '../context/PrescriptionContext';
 import type { PatientInfo, PrescriptionTemplate } from '@/types';
+
+const PAGE_SIZE = 6;
 
 // Define the section metadata with all possible sections
 const SECTION_META: Record<string, { label: string; icon: React.ReactElement }> = {
@@ -44,9 +49,7 @@ const SECTION_META: Record<string, { label: string; icon: React.ReactElement }> 
 };
 
 interface SmallNavbarProps {
-  patientName?: string;
   isEditing?: boolean;
-  prescriptionId?: string | null;
   patientInfo?: PatientInfo | null;
   mainTemplates?: PrescriptionTemplate[];
   onConfigurePad?: () => void;
@@ -55,18 +58,41 @@ interface SmallNavbarProps {
 }
 
 export default function SmallNavbar({
-  patientName,
   isEditing,
-  prescriptionId,
   patientInfo,
   mainTemplates = [],
   onConfigurePad,
   onApplyMainTemplate,
   onScrollToSection,
 }: SmallNavbarProps) {
-  const { activeSection, setActiveSection, sectionConfig } = usePrescription();
+  const { activeSection, setActiveSection, sectionConfig, saveAsMainTemplate, deleteMainTemplate } = usePrescription();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteTemplate = useCallback(async (templateId: string) => {
+    setDeletingId(templateId);
+    await deleteMainTemplate(templateId);
+    setDeletingId(null);
+  }, [deleteMainTemplate]);
   const [templateAnchor, setTemplateAnchor] = useState<null | HTMLElement>(null);
   const [templateSearch, setTemplateSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // "Save as Template" dialog — captures current prescription state into a reusable main template
+  const [saveTmplDialogOpen, setSaveTmplDialogOpen] = useState(false);
+  const [newTmplName, setNewTmplName] = useState('');
+  const [savingNewTmpl, setSavingNewTmpl] = useState(false);
+
+  const handleSaveCurrentAsTemplate = useCallback(async () => {
+    const name = newTmplName.trim();
+    if (!name) return;
+    setSavingNewTmpl(true);
+    const ok = await saveAsMainTemplate(name);
+    setSavingNewTmpl(false);
+    if (ok) {
+      setSaveTmplDialogOpen(false);
+      setNewTmplName('');
+    }
+  }, [newTmplName, saveAsMainTemplate]);
 
   const visibleSections = sectionConfig.sectionOrder.filter(
     s => sectionConfig.enabledSections.includes(s)
@@ -83,6 +109,17 @@ export default function SmallNavbar({
     return mainTemplates.filter(t => t.name.toLowerCase().includes(q));
   }, [mainTemplates, templateSearch]);
 
+  // Paginate: show 6 at a time with "Show More"
+  const visibleTemplates = useMemo(
+    () => filteredTemplates.slice(0, visibleCount),
+    [filteredTemplates, visibleCount],
+  );
+
+  // Reset pagination when search changes or menu opens fresh
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [templateSearch]);
+
   // Handle tab change: update active section + smooth scroll
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     const sectionId = visibleSections[newValue];
@@ -95,6 +132,7 @@ export default function SmallNavbar({
   const handleTemplateClose = () => {
     setTemplateAnchor(null);
     setTemplateSearch('');
+    setVisibleCount(PAGE_SIZE);
   };
 
   return (
@@ -109,19 +147,14 @@ export default function SmallNavbar({
         boxShadow: 1,
       }}
     >
-      {/* Header row: title + actions */}
+      {/* Header row: actions (title removed — breadcrumb already shows "Prescription") */}
       <Box
         sx={{
           px: 2, pt: 1, pb: 0.5,
           display: 'flex', alignItems: 'center', gap: 1.5,
         }}
       >
-        <Typography variant="subtitle2" color="text.secondary" noWrap sx={{ flex: 1 }}>
-          {isEditing
-            ? `Edit Prescription${prescriptionId ? ` -- ID: ${prescriptionId.slice(0, 8)}` : ''}`
-            : `New Prescription${patientName ? ` -- ${patientName}` : ''}`
-          }
-        </Typography>
+        <Box sx={{ flex: 1 }} />
 
         {isEditing && (
           <Chip
@@ -148,7 +181,6 @@ export default function SmallNavbar({
               <IconButton
                 size="small"
                 onClick={(e) => setTemplateAnchor(e.currentTarget)}
-                disabled={mainTemplates.length === 0}
                 sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 1 }}
               >
                 <DescriptionIcon fontSize="small" sx={{ mr: 0.5 }} />
@@ -165,52 +197,96 @@ export default function SmallNavbar({
           onClose={handleTemplateClose}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          slotProps={{ paper: { sx: { minWidth: 240, maxHeight: 380 } } }}
+          slotProps={{ paper: { sx: { minWidth: 260, maxHeight: 440 } } }}
         >
-          {/* Search filter */}
-          {mainTemplates.length > 3 && (
-            <Box sx={{ px: 1.5, py: 1 }}>
-              <TextField
-                size="small"
-                placeholder="Search templates..."
-                value={templateSearch}
-                onChange={(e) => setTemplateSearch(e.target.value)}
-                fullWidth
-                autoFocus
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
-                      </InputAdornment>
-                    ),
-                    sx: { fontSize: 13 },
-                  },
-                }}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-              />
-            </Box>
-          )}
+          {/* Save as Template action */}
+          <MenuItem
+            onClick={() => { handleTemplateClose(); setSaveTmplDialogOpen(true); }}
+            sx={{ color: 'primary.main' }}
+          >
+            <BookmarkAddIcon fontSize="small" sx={{ mr: 1 }} />
+            <ListItemText
+              primary="Save as Template"
+              primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+            />
+          </MenuItem>
+          <Divider />
+          {/* Search filter — always shown */}
+          <Box sx={{ px: 1.5, py: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Search templates..."
+              value={templateSearch}
+              onChange={(e) => setTemplateSearch(e.target.value)}
+              fullWidth
+              autoFocus
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
+                    </InputAdornment>
+                  ),
+                  sx: { fontSize: 13 },
+                },
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </Box>
           {filteredTemplates.length === 0 ? (
             <MenuItem disabled>
-              <ListItemText secondary={templateSearch ? 'No matching templates' : 'No templates available'} />
+              <ListItemText secondary={templateSearch ? 'No matching templates' : 'No templates yet — click "Save as Template"'} />
             </MenuItem>
           ) : (
-            filteredTemplates.map((tmpl) => (
-              <MenuItem
-                key={tmpl.templateId}
-                onClick={() => {
-                  onApplyMainTemplate?.(tmpl.templateId);
-                  handleTemplateClose();
-                }}
-              >
-                <ListItemText
-                  primary={tmpl.name}
-                  primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-                />
-              </MenuItem>
-            ))
+            <>
+              {visibleTemplates.map((tmpl) => (
+                <MenuItem
+                  key={tmpl.templateId}
+                  onClick={() => {
+                    onApplyMainTemplate?.(tmpl.templateId);
+                    handleTemplateClose();
+                  }}
+                  sx={{ pr: 1 }}
+                >
+                  <ListItemText
+                    primary={tmpl.name}
+                    primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                  />
+                  <Tooltip title="Delete template">
+                    <span>
+                      <IconButton
+                        size="small"
+                        edge="end"
+                        disabled={deletingId === tmpl.templateId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTemplate(tmpl.templateId);
+                        }}
+                        sx={{ color: 'error.main', ml: 1 }}
+                      >
+                        {deletingId === tmpl.templateId
+                          ? <CircularProgress size={14} color="inherit" />
+                          : <DeleteOutlineIcon fontSize="small" />}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </MenuItem>
+              ))}
+              {visibleCount < filteredTemplates.length && (
+                <Box sx={{ px: 1.5, py: 0.75, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    size="small"
+                    fullWidth
+                    variant="text"
+                    onClick={(e) => { e.stopPropagation(); setVisibleCount(c => c + PAGE_SIZE); }}
+                    sx={{ fontSize: 12, fontWeight: 600 }}
+                  >
+                    Show More ({filteredTemplates.length - visibleCount} more)
+                  </Button>
+                </Box>
+              )}
+            </>
           )}
         </Menu>
 
@@ -295,6 +371,49 @@ export default function SmallNavbar({
           );
         })}
       </Tabs>
+
+      {/* Save-as-Template dialog */}
+      <Dialog
+        open={saveTmplDialogOpen}
+        onClose={() => !savingNewTmpl && setSaveTmplDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <BookmarkAddIcon color="primary" fontSize="small" />
+          Save as Template
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Save the current prescription as a reusable template.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            size="small"
+            label="Template name"
+            value={newTmplName}
+            onChange={(e) => setNewTmplName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !savingNewTmpl) handleSaveCurrentAsTemplate();
+            }}
+            disabled={savingNewTmpl}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setSaveTmplDialogOpen(false)} disabled={savingNewTmpl} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveCurrentAsTemplate}
+            variant="contained"
+            disabled={savingNewTmpl || !newTmplName.trim()}
+            startIcon={savingNewTmpl ? <CircularProgress size={16} color="inherit" /> : <BookmarkAddIcon />}
+          >
+            {savingNewTmpl ? 'Saving...' : 'Save Template'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -13,6 +13,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import SectionHeader from '../components/SectionHeader';
+import InlineEditableName, { type SearchOption } from '../components/InlineEditableName';
 import { usePrescription } from '../context/PrescriptionContext';
 import { mastersApi } from '@/services/api';
 import { useFrequentlyUsed } from '@/hooks/useFrequentlyUsed';
@@ -97,6 +98,11 @@ export default function SymptomsSection() {
 
   const showFrequentDropdown = showFrequent && !searchTerm && frequentSymptoms.length > 0;
 
+  const searchSymptomName = useCallback(async (q: string): Promise<SearchOption[]> => {
+    const res = await mastersApi.getSymptoms(q);
+    return (res.data || []).map(s => ({ label: s.name }));
+  }, []);
+
   return (
     <SectionHeader
       id="symptoms"
@@ -178,15 +184,15 @@ export default function SymptomsSection() {
       </Box>
 
       {symptoms.length > 0 && (
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 40, p: 0.5 }} />
+              <TableCell sx={{ width: 36, p: 0.5 }} />
               <TableCell>Symptom</TableCell>
               <TableCell sx={{ width: 130 }}>Severity</TableCell>
               <TableCell sx={{ width: 120 }}>Duration</TableCell>
               <TableCell sx={{ width: 130 }}>Laterality</TableCell>
-              <TableCell sx={{ width: 50 }} />
+              <TableCell sx={{ width: 44 }} />
             </TableRow>
           </TableHead>
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -216,7 +222,13 @@ export default function SymptomsSection() {
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <Chip label={s.name} size="small" variant="outlined" />
+                            <InlineEditableName
+                              value={s.name}
+                              searchFn={searchSymptomName}
+                              placeholder="Search symptom..."
+                              onRename={(name) => updateSymptom(i, { ...s, name })}
+                              onReplace={(opt) => updateSymptom(i, { ...s, name: opt.label })}
+                            />
                           </TableCell>
                           <TableCell>
                             <TextField
@@ -229,6 +241,11 @@ export default function SymptomsSection() {
                               }}
                               size="small"
                               fullWidth
+                              sx={{
+                                m: 0,
+                                '& .MuiInputBase-root': { height: 30, fontSize: 13 },
+                                '& .MuiSelect-select': { py: 0.25, px: 0.75 },
+                              }}
                             >
                               {severityOptions && severityOptions.length > 0
                                 ? severityOptions.map(opt => (
@@ -246,6 +263,11 @@ export default function SymptomsSection() {
                               placeholder="e.g. 3 days"
                               size="small"
                               fullWidth
+                              sx={{
+                                m: 0,
+                                '& .MuiInputBase-root': { height: 30, fontSize: 13 },
+                                '& .MuiInputBase-input': { fontSize: 13, py: 0.25, px: 0.75 },
+                              }}
                             />
                           </TableCell>
                           <TableCell>
@@ -259,6 +281,11 @@ export default function SymptomsSection() {
                               }}
                               size="small"
                               fullWidth
+                              sx={{
+                                m: 0,
+                                '& .MuiInputBase-root': { height: 30, fontSize: 13 },
+                                '& .MuiSelect-select': { py: 0.25, px: 0.75 },
+                              }}
                             >
                               <MenuItem value="">N/A</MenuItem>
                               {lateralityOptions && lateralityOptions.length > 0

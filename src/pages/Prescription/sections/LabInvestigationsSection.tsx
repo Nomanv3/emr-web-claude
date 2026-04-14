@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  Box, TextField, Button, Autocomplete, IconButton, Chip,
+  Box, TextField, Button, Autocomplete, IconButton,
   Table, TableHead, TableRow, TableCell, TableBody, Switch, FormControlLabel,
 } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
@@ -10,6 +10,8 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery } from '@tanstack/react-query';
 import SectionHeader from '../components/SectionHeader';
+import InlineEditableName, { type SearchOption } from '../components/InlineEditableName';
+import InlineEditableCell from '../components/InlineEditableCell';
 import { usePrescription } from '../context/PrescriptionContext';
 import { mastersApi } from '@/services/api';
 import type { LabInvestigation } from '@/types';
@@ -21,6 +23,15 @@ export default function LabInvestigationsSection() {
     getTemplatesByType, addTemplate, deleteTemplate, applyTemplate,
   } = usePrescription();
   const [searchTerm, setSearchTerm] = useState('');
+
+  const searchLabName = useCallback(async (q: string): Promise<SearchOption[]> => {
+    const res = await mastersApi.getLabTests(q);
+    return (res.data || []).map(t => ({
+      label: t.name,
+      secondary: t.category,
+      payload: { name: t.name, category: t.category },
+    }));
+  }, []);
 
   const { data: masterTests } = useQuery({
     queryKey: ['masters', 'lab-tests', searchTerm],
@@ -98,17 +109,17 @@ export default function LabInvestigationsSection() {
       </Box>
 
       {labInvestigations.length > 0 && (
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 40, p: 0.5 }} />
+              <TableCell sx={{ width: 36, p: 0.5 }} />
               <TableCell>Test Name</TableCell>
-              <TableCell>Category</TableCell>
+              <TableCell sx={{ width: 130 }}>Category</TableCell>
               <TableCell sx={{ width: 130 }}>Test Date</TableCell>
               <TableCell sx={{ width: 130 }}>Repeat Date</TableCell>
               <TableCell sx={{ width: 150 }}>Remarks</TableCell>
-              <TableCell sx={{ width: 80 }}>Urgent</TableCell>
-              <TableCell sx={{ width: 50 }} />
+              <TableCell sx={{ width: 70 }}>Urgent</TableCell>
+              <TableCell sx={{ width: 44 }} />
             </TableRow>
           </TableHead>
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -137,18 +148,40 @@ export default function LabInvestigationsSection() {
                               <DragIndicatorIcon fontSize="small" />
                             </Box>
                           </TableCell>
-                          <TableCell><Chip label={lab.testName} size="small" variant="outlined" color="secondary" /></TableCell>
-                          <TableCell>{lab.category || '-'}</TableCell>
                           <TableCell>
-                            <TextField type="date" value={lab.testOn || ''} size="small" fullWidth slotProps={{ inputLabel: { shrink: true } }}
+                            <InlineEditableName
+                              value={lab.testName}
+                              searchFn={searchLabName}
+                              placeholder="Search test..."
+                              onRename={(name) => updateLabInvestigation(i, { ...lab, testName: name })}
+                              onReplace={(opt) => {
+                                const p = opt.payload as { name: string; category: string } | undefined;
+                                updateLabInvestigation(i, { ...lab, testName: p?.name ?? opt.label, category: p?.category ?? lab.category });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={lab.category || ''}
+                              placeholder="Category"
+                              onChange={(val) => updateLabInvestigation(i, { ...lab, category: val || undefined })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField type="date" value={lab.testOn || ''} size="small" fullWidth
+                              slotProps={{ inputLabel: { shrink: true } }}
+                              sx={{ m: 0, '& .MuiInputBase-root': { height: 30, fontSize: 13 }, '& .MuiInputBase-input': { py: 0.25, px: 0.75 } }}
                               onChange={e => updateLabInvestigation(i, { ...lab, testOn: e.target.value })} />
                           </TableCell>
                           <TableCell>
-                            <TextField type="date" value={lab.repeatOn || ''} size="small" fullWidth slotProps={{ inputLabel: { shrink: true } }}
+                            <TextField type="date" value={lab.repeatOn || ''} size="small" fullWidth
+                              slotProps={{ inputLabel: { shrink: true } }}
+                              sx={{ m: 0, '& .MuiInputBase-root': { height: 30, fontSize: 13 }, '& .MuiInputBase-input': { py: 0.25, px: 0.75 } }}
                               onChange={e => updateLabInvestigation(i, { ...lab, repeatOn: e.target.value })} />
                           </TableCell>
                           <TableCell>
                             <TextField value={lab.remarks || ''} size="small" fullWidth placeholder="Remarks"
+                              sx={{ m: 0, '& .MuiInputBase-root': { height: 30, fontSize: 13 }, '& .MuiInputBase-input': { py: 0.25, px: 0.75 } }}
                               onChange={e => updateLabInvestigation(i, { ...lab, remarks: e.target.value })} />
                           </TableCell>
                           <TableCell>

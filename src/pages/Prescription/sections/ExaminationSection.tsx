@@ -13,15 +13,22 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import SectionHeader from '../components/SectionHeader';
+import InlineEditableName, { type SearchOption } from '../components/InlineEditableName';
+import InlineEditableCell from '../components/InlineEditableCell';
 import { usePrescription } from '../context/PrescriptionContext';
 import { mastersApi } from '@/services/api';
 import { useFrequentlyUsed } from '@/hooks/useFrequentlyUsed';
 
 export default function ExaminationSection() {
   const {
-    examinationFindings, addExaminationFinding, removeExaminationFinding, reorderExaminationFindings,
+    examinationFindings, addExaminationFinding, removeExaminationFinding, updateExaminationFinding, reorderExaminationFindings,
     getTemplatesByType, addTemplate, updateTemplate, deleteTemplate, applyTemplate,
   } = usePrescription();
+
+  const searchFindingName = useCallback(async (q: string): Promise<SearchOption[]> => {
+    const res = await mastersApi.getExaminationFindings(q);
+    return (res.data || []).map(f => ({ label: f.name }));
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [notes, setNotes] = useState('');
   const [showFrequent, setShowFrequent] = useState(false);
@@ -162,13 +169,13 @@ export default function ExaminationSection() {
       </Box>
 
       {examinationFindings.length > 0 && (
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 40, p: 0.5 }} />
-              <TableCell>Finding</TableCell>
+              <TableCell sx={{ width: 36, p: 0.5 }} />
+              <TableCell sx={{ width: '40%' }}>Finding</TableCell>
               <TableCell>Notes</TableCell>
-              <TableCell sx={{ width: 50 }} />
+              <TableCell sx={{ width: 44 }} />
             </TableRow>
           </TableHead>
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -197,8 +204,22 @@ export default function ExaminationSection() {
                               <DragIndicatorIcon fontSize="small" />
                             </Box>
                           </TableCell>
-                          <TableCell>{f.name}</TableCell>
-                          <TableCell>{f.notes || '-'}</TableCell>
+                          <TableCell>
+                            <InlineEditableName
+                              value={f.name}
+                              searchFn={searchFindingName}
+                              placeholder="Search finding..."
+                              onRename={(name) => updateExaminationFinding(i, { ...f, name })}
+                              onReplace={(opt) => updateExaminationFinding(i, { ...f, name: opt.label })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={f.notes || ''}
+                              placeholder="Add notes..."
+                              onChange={(val) => updateExaminationFinding(i, { ...f, notes: val || undefined })}
+                            />
+                          </TableCell>
                           <TableCell>
                             <IconButton size="small" color="error" onClick={() => removeExaminationFinding(i)}>
                               <DeleteIcon fontSize="small" />

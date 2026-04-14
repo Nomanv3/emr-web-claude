@@ -1,7 +1,6 @@
 import { Box, Typography, Button, Paper, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import {
   Add as AddIcon,
-  Refresh as RefreshIcon,
   ViewList as ListIcon,
   CalendarViewDay as DayIcon,
   CalendarViewWeek as WeekIcon,
@@ -120,7 +119,7 @@ export default function QueueDashboard() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            Queue Dashboard
+            Queue
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Manage today&apos;s patient queue and appointments
@@ -157,7 +156,7 @@ export default function QueueDashboard() {
             }}
           >
             <ToggleButton value="queue" aria-label="Queue list view">
-              <ListIcon sx={{ fontSize: 18 }} />
+              <ListIcon sx={{ fontSize: 18 }} /> Queue
             </ToggleButton>
             <ToggleButton value="day" aria-label="Day schedule view">
               <DayIcon sx={{ fontSize: 18 }} /> Day
@@ -170,14 +169,6 @@ export default function QueueDashboard() {
             </ToggleButton>
           </ToggleButtonGroup>
 
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => refetch()}
-            size="small"
-          >
-            Refresh
-          </Button>
           <Button
             variant="contained"
             startIcon={<AddIcon />}

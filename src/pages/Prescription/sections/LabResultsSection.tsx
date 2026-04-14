@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  Box, TextField, Button, IconButton, Chip, Grid, Autocomplete,
+  Box, TextField, Button, IconButton, Grid, Autocomplete,
   Table, TableHead, TableRow, TableCell, TableBody, MenuItem,
 } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -11,6 +11,8 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useQuery } from '@tanstack/react-query';
 import SectionHeader from '../components/SectionHeader';
+import InlineEditableName, { type SearchOption } from '../components/InlineEditableName';
+import InlineEditableCell, { type CellOption } from '../components/InlineEditableCell';
 import { usePrescription } from '../context/PrescriptionContext';
 import { mastersApi } from '@/services/api';
 import BrowsePanel from '../components/BrowsePanel';
@@ -19,7 +21,16 @@ import type { LabResult } from '@/types';
 const FALLBACK_INTERPRETATIONS = ['Normal', 'Abnormal', 'Critical'];
 
 export default function LabResultsSection() {
-  const { labResults, addLabResult, removeLabResult, reorderLabResults, dropdownOptions } = usePrescription();
+  const { labResults, addLabResult, removeLabResult, updateLabResult, reorderLabResults, dropdownOptions } = usePrescription();
+
+  const searchLabResultName = useCallback(async (q: string): Promise<SearchOption[]> => {
+    const res = await mastersApi.getLabTests(q);
+    return (res.data || []).map(t => ({
+      label: t.name,
+      secondary: t.category,
+      payload: { name: t.name, unit: t.unit, normalRange: t.normalRange },
+    }));
+  }, []);
   const interpretationOpts = (dropdownOptions as Record<string, Record<string, { dropdown_option_id: number; option_value: string }[]>> | null)
     ?.labresult?.interpretation;
   const [searchTerm, setSearchTerm] = useState('');
@@ -121,16 +132,16 @@ export default function LabResultsSection() {
       </Box>
 
       {labResults.length > 0 && (
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 40, p: 0.5 }} />
+              <TableCell sx={{ width: 36, p: 0.5 }} />
               <TableCell>Test</TableCell>
-              <TableCell>Reading</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell>Normal Range</TableCell>
-              <TableCell>Interpretation</TableCell>
-              <TableCell sx={{ width: 50 }} />
+              <TableCell sx={{ width: 100 }}>Reading</TableCell>
+              <TableCell sx={{ width: 80 }}>Unit</TableCell>
+              <TableCell sx={{ width: 120 }}>Normal Range</TableCell>
+              <TableCell sx={{ width: 130 }}>Interpretation</TableCell>
+              <TableCell sx={{ width: 44 }} />
             </TableRow>
           </TableHead>
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -159,16 +170,58 @@ export default function LabResultsSection() {
                               <DragIndicatorIcon fontSize="small" />
                             </Box>
                           </TableCell>
-                          <TableCell>{r.testName}</TableCell>
-                          <TableCell><strong>{r.reading}</strong></TableCell>
-                          <TableCell>{r.unit}</TableCell>
-                          <TableCell>{r.normalRange}</TableCell>
                           <TableCell>
-                            <Chip
-                              label={r.interpretation}
-                              size="small"
-                              color={r.interpretation === 'Normal' ? 'success' : r.interpretation === 'Critical' ? 'error' : 'warning'}
+                            <InlineEditableName
+                              value={r.testName}
+                              searchFn={searchLabResultName}
+                              placeholder="Search test..."
+                              onRename={(name) => updateLabResult(i, { ...r, testName: name })}
+                              onReplace={(opt) => {
+                                const p = opt.payload as { name: string; unit?: string; normalRange?: string } | undefined;
+                                updateLabResult(i, {
+                                  ...r,
+                                  testName: p?.name ?? opt.label,
+                                  unit: p?.unit || r.unit,
+                                  normalRange: p?.normalRange || r.normalRange,
+                                });
+                              }}
                             />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={r.reading || ''}
+                              placeholder="Reading"
+                              onChange={(val) => updateLabResult(i, { ...r, reading: val })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={r.unit || ''}
+                              placeholder="Unit"
+                              onChange={(val) => updateLabResult(i, { ...r, unit: val })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={r.normalRange || ''}
+                              placeholder="Normal"
+                              onChange={(val) => updateLabResult(i, { ...r, normalRange: val })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const interpOpts: CellOption[] = interpretationOpts && interpretationOpts.length > 0
+                                ? interpretationOpts.map(o => ({ value: o.option_value, label: o.option_value, id: o.dropdown_option_id }))
+                                : FALLBACK_INTERPRETATIONS.map(v => ({ value: v, label: v }));
+                              return (
+                                <InlineEditableCell
+                                  value={r.interpretation || ''}
+                                  options={interpOpts}
+                                  chip
+                                  onChange={(val) => updateLabResult(i, { ...r, interpretation: val })}
+                                />
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <IconButton size="small" color="error" onClick={() => removeLabResult(i)}>

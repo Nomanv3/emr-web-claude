@@ -48,18 +48,97 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ─── Response Interceptor: handle errors (AUTH DISABLED) ─────────────
-// No token refresh or login redirect — auth is disabled for development
+// ─── Response Interceptor: 401 → refresh once (queued) → else redirect to /login
+// Uses the backend 401 envelope { success:false, message, code:'AUTH_*' }.
+
+type RetryableConfig = Parameters<typeof api.request>[0] & {
+  _retry?: boolean;
+};
+
+let isRefreshing = false;
+let refreshQueue: Array<(token: string | null) => void> = [];
+
+function flushQueue(newToken: string | null) {
+  refreshQueue.forEach((cb) => cb(newToken));
+  refreshQueue = [];
+}
+
+function clearAuthStorage() {
+  localStorage.removeItem('emr_token');
+  localStorage.removeItem('emr_refresh_token');
+  localStorage.removeItem('emr_user');
+}
+
+function redirectToLogin() {
+  // Avoid bouncing if we're already on /login
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Log API errors for debugging
+  async (error) => {
     const status = error.response?.status;
-    const url = error.config?.url;
+    const originalRequest = error.config as RetryableConfig | undefined;
+    const url: string = originalRequest?.url || '';
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh');
+
     const message = error.response?.data?.message || error.message;
     console.error(`[API Error] ${status || 'NETWORK'} ${url}: ${message}`);
-    return Promise.reject(error);
+
+    if (status !== 401 || !originalRequest || isAuthEndpoint || originalRequest._retry) {
+      // Non-401, or retry already attempted, or it's the login/refresh call itself
+      if (status === 401 && isAuthEndpoint) {
+        // Login/refresh failure — surface to caller, don't redirect
+      }
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+
+    const refreshToken = localStorage.getItem('emr_refresh_token');
+    if (!refreshToken) {
+      clearAuthStorage();
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
+    // Already refreshing? Queue this request
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        refreshQueue.push((newToken) => {
+          if (newToken) {
+            originalRequest.headers = originalRequest.headers || {};
+            (originalRequest.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
+            resolve(api.request(originalRequest));
+          } else {
+            reject(error);
+          }
+        });
+      });
+    }
+
+    isRefreshing = true;
+    try {
+      const resp = await authApi.refresh(refreshToken);
+      const newToken = resp?.data?.token;
+      if (!newToken) throw new Error('No token in refresh response');
+      localStorage.setItem('emr_token', newToken);
+      flushQueue(newToken);
+      originalRequest.headers = originalRequest.headers || {};
+      (originalRequest.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
+      return api.request(originalRequest);
+    } catch (refreshErr) {
+      flushQueue(null);
+      clearAuthStorage();
+      // Lazy-load sonner to avoid cycle at module load
+      import('sonner').then(({ toast }) => toast.error('Session expired. Please sign in again.')).catch(() => {});
+      redirectToLogin();
+      return Promise.reject(refreshErr);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 

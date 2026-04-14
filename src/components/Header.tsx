@@ -1,13 +1,10 @@
-import { useState, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
   Typography,
   IconButton,
-  Avatar,
-  Menu,
-  MenuItem,
   Box,
   Breadcrumbs,
   Link,
@@ -15,16 +12,12 @@ import {
   Autocomplete,
   TextField,
   CircularProgress,
-  Divider,
-  ListItemIcon,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import {
   Notifications as NotificationsIcon,
   Search as SearchIcon,
-  Logout as LogoutIcon,
-  Person as PersonIcon,
   Menu as MenuIcon,
   NavigateNext as NavigateNextIcon,
   PersonAdd as PersonAddIcon,
@@ -39,7 +32,7 @@ import type { Patient } from '@/types';
 import RegisterPatientDialog from '@/pages/Patients/components/RegisterPatientDialog';
 
 const breadcrumbMap: Record<string, string> = {
-  '/': 'Dashboard',
+  '/': 'Queue',
   '/patients': 'Patients',
   '/patient': 'Patient Detail',
   '/visit-details': 'Prescription',
@@ -49,7 +42,7 @@ const breadcrumbMap: Record<string, string> = {
 };
 
 function getBreadcrumbs(pathname: string): Array<{ label: string; path: string }> {
-  const crumbs: Array<{ label: string; path: string }> = [{ label: 'Dashboard', path: '/' }];
+  const crumbs: Array<{ label: string; path: string }> = [{ label: 'Queue', path: '/' }];
 
   if (pathname === '/') return crumbs;
 
@@ -63,17 +56,41 @@ function getBreadcrumbs(pathname: string): Array<{ label: string; path: string }
 export default function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { toggleSidebar } = useAppContext();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const queryClient = useQueryClient();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
 
   const breadcrumbs = getBreadcrumbs(location.pathname);
+
+  // On the Patients page, the global search live-filters the table instead of
+  // acting as a navigation dropdown. It reads/writes the `?search=` URL param.
+  const isPatientsPage = location.pathname === '/patients';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') ?? '';
+  const [patientPageSearch, setPatientPageSearch] = useState(urlSearch);
+
+  // Keep local input in sync when the URL param changes externally
+  useEffect(() => {
+    if (isPatientsPage) setPatientPageSearch(urlSearch);
+  }, [urlSearch, isPatientsPage]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedSetUrlSearch = useCallback(
+    debounce((val: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (val.trim()) next.set('search', val.trim());
+        else next.delete('search');
+        return next;
+      }, { replace: true });
+    }, 250),
+    [setSearchParams],
+  );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSetSearch = useCallback(
@@ -108,12 +125,6 @@ export default function Header() {
 
   // Only open the dropdown when the user has typed something
   const searchOpen = searchInput.trim().length >= 2;
-
-  const handleLogout = useCallback(() => {
-    setAnchorEl(null);
-    logout();
-    navigate('/login');
-  }, [logout, navigate]);
 
   return (
     <AppBar
@@ -174,8 +185,26 @@ export default function Header() {
           })}
         </Breadcrumbs>
 
-        {/* Global patient search */}
-        {!isMobile && (
+        {/* Global patient search — on /patients it live-filters the table via URL param */}
+        {!isMobile && isPatientsPage && (
+          <TextField
+            size="small"
+            value={patientPageSearch}
+            onChange={(e) => {
+              setPatientPageSearch(e.target.value);
+              debouncedSetUrlSearch(e.target.value);
+            }}
+            placeholder="Filter patients..."
+            sx={{ width: 280 }}
+            slotProps={{
+              input: {
+                startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 0.5, fontSize: 20 }} />,
+              },
+            }}
+          />
+        )}
+
+        {!isMobile && !isPatientsPage && (
           <Autocomplete<Patient>
             size="small"
             options={searchOptions}
@@ -277,85 +306,6 @@ export default function Header() {
           </Badge>
         </IconButton>
 
-        {/* User menu */}
-        <Box
-          onClick={(e) => setAnchorEl(e.currentTarget)}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            cursor: 'pointer',
-            borderRadius: 2,
-            py: 0.5,
-            px: 1,
-            transition: 'background-color 200ms ease',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-        >
-          <Avatar
-            sx={{
-              width: 34,
-              height: 34,
-              bgcolor: 'primary.main',
-              fontSize: '0.85rem',
-            }}
-          >
-            {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
-          </Avatar>
-          {!isMobile && (
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" fontWeight={600} noWrap lineHeight={1.3}>
-                {user?.name ?? 'User'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap lineHeight={1.2} sx={{ fontSize: '0.7rem' }}>
-                {user?.role ?? 'Doctor'}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={() => setAnchorEl(null)}
-          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-          slotProps={{
-            paper: {
-              sx: {
-                mt: 1,
-                minWidth: 200,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                border: '1px solid',
-                borderColor: 'divider',
-              },
-            },
-          }}
-        >
-          <Box sx={{ px: 2, py: 1.5 }}>
-            <Typography variant="body2" fontWeight={600}>
-              {user?.name ?? 'User'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {user?.email ?? ''}
-            </Typography>
-          </Box>
-          <Divider />
-          <MenuItem
-            onClick={() => setAnchorEl(null)}
-            sx={{ py: 1.5, fontSize: '0.875rem' }}
-          >
-            <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
-            Profile
-          </MenuItem>
-          <MenuItem
-            onClick={handleLogout}
-            sx={{ py: 1.5, fontSize: '0.875rem', color: 'error.main' }}
-          >
-            <ListItemIcon><LogoutIcon fontSize="small" sx={{ color: 'error.main' }} /></ListItemIcon>
-            Logout
-          </MenuItem>
-        </Menu>
       </Toolbar>
 
       {/* Register dialog opened from the "Add patient" row in the search dropdown */}

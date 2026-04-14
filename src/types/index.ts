@@ -727,7 +727,7 @@ export type VitalUnitsMap = Record<string, VitalUnitOption[]>;
 // ─── Auth ────────────────────────────────────────────────────────────
 
 export interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
 }
 

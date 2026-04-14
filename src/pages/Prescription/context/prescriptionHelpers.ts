@@ -60,6 +60,24 @@ export async function fetchAllTemplates(): Promise<PrescriptionTemplate[]> {
   }
 }
 
+export async function fetchMainTemplatesApi(): Promise<PrescriptionTemplate[]> {
+  try {
+    const res = await templatesApi.getMainTemplates({
+      organization_id: DEV_ORG,
+      branch_id: DEV_BRANCH,
+    });
+    const data = res.data as unknown;
+    if (Array.isArray(data)) return data as PrescriptionTemplate[];
+    if (data && typeof data === 'object' && 'templates' in data) {
+      return (data as { templates: PrescriptionTemplate[] }).templates;
+    }
+    return [];
+  } catch (e) {
+    console.error('[Prescription] Failed to fetch main templates:', e);
+    return [];
+  }
+}
+
 export async function fetchVitalUnits(): Promise<VitalUnitsMap | null> {
   try {
     const res = await prescriptionApi.getVitalUnits();

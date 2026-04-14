@@ -51,8 +51,8 @@ function PrescriptionContent() {
   const {
     setPatient, setIsEditing, setPrescriptionId, loadPrescription,
     collectPayload, collectPrescriptionData, setIsSaving,
-    sectionConfig, patient, isEditing, prescriptionId,
-    clearAllPrescription, patientInfo, mainTemplates, applyTemplate,
+    sectionConfig, isEditing, prescriptionId,
+    clearAllPrescription, patientInfo, mainTemplates, applyMainTemplate,
     dropdownOptions, printEnabledSections,
   } = usePrescription();
 
@@ -177,8 +177,8 @@ function PrescriptionContent() {
   }, [handleFinish]);
 
   const handleApplyMainTemplate = useCallback((templateId: string) => {
-    applyTemplate(templateId, 'main');
-  }, [applyTemplate]);
+    applyMainTemplate(templateId);
+  }, [applyMainTemplate]);
 
 
   if (patientLoading) {
@@ -216,9 +216,7 @@ function PrescriptionContent() {
       }}
     >
       <SmallNavbar
-        patientName={patient?.name}
         isEditing={isEditing}
-        prescriptionId={prescriptionId}
         patientInfo={patientInfo}
         mainTemplates={mainTemplates}
         onConfigurePad={() => setConfigurePadOpen(true)}

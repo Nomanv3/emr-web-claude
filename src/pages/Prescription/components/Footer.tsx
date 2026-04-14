@@ -58,7 +58,7 @@ export default function Footer({
         sx={{
           flexShrink: 0,
           zIndex: 10,
-          background: 'linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #42a5f5 100%)',
+          background: 'linear-gradient(135deg, #0D7C66 0%, #17B890 100%)',
           px: 2.5,
           py: 1.5,
           display: 'flex',
@@ -145,38 +145,42 @@ export default function Footer({
           Preview
         </Button>
 
-        {/* Save / Update */}
-        <Button
-          variant="contained"
-          size="medium"
-          startIcon={isSaving ? <CircularProgress size={18} sx={{ color: '#1565c0' }} /> : <SaveIcon />}
-          onClick={onSave}
-          disabled={isSaving}
-          sx={{
-            bgcolor: '#fff',
-            color: '#1565c0',
-            fontWeight: 700,
-            '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
-            '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.5)', color: 'rgba(21,101,192,0.5)' },
-          }}
-        >
-          {isSaving ? 'Saving...' : isEditing ? 'Update Prescription' : 'Save Prescription'}
-        </Button>
+        {/* Update Prescription — only in edit mode (new flow saves via Finish Prescription) */}
+        {isEditing && (
+          <Button
+            variant="contained"
+            size="medium"
+            startIcon={isSaving ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : <SaveIcon />}
+            onClick={onSave}
+            disabled={isSaving}
+            sx={{
+              bgcolor: '#5EC2B5',
+              color: '#fff',
+              fontWeight: 600,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+              '&:hover': { bgcolor: '#4DB0A3' },
+              '&.Mui-disabled': { bgcolor: 'rgba(94,194,181,0.5)', color: 'rgba(255,255,255,0.7)' },
+            }}
+          >
+            {isSaving ? 'Saving...' : 'Update Prescription'}
+          </Button>
+        )}
 
-        {/* Finish Prescription */}
+        {/* Finish Prescription — soft amber accent with white text */}
         <Tooltip title="Save prescription and generate PDF">
           <Button
             variant="contained"
             size="medium"
-            startIcon={isSaving ? <CircularProgress size={18} /> : <DoneAllIcon />}
+            startIcon={isSaving ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : <DoneAllIcon />}
             onClick={onFinish}
             disabled={isSaving}
             sx={{
-              bgcolor: '#2e7d32',
+              bgcolor: '#FBBF24',
               color: '#fff',
-              fontWeight: 700,
-              '&:hover': { bgcolor: '#1b5e20' },
-              '&.Mui-disabled': { bgcolor: 'rgba(46,125,50,0.4)' },
+              fontWeight: 600,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+              '&:hover': { bgcolor: '#F59E0B' },
+              '&.Mui-disabled': { bgcolor: 'rgba(251,191,36,0.5)', color: 'rgba(255,255,255,0.7)' },
             }}
           >
             Finish Prescription

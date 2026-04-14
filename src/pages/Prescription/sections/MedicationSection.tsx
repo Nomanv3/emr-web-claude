@@ -13,6 +13,8 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import SectionHeader from '../components/SectionHeader';
+import InlineEditableName, { type SearchOption } from '../components/InlineEditableName';
+import InlineEditableCell, { type CellOption } from '../components/InlineEditableCell';
 import { usePrescription } from '../context/PrescriptionContext';
 import { mastersApi } from '@/services/api';
 import { useFrequentlyUsed } from '@/hooks/useFrequentlyUsed';
@@ -31,10 +33,33 @@ const emptyMed: Medication = {
 
 export default function MedicationSection() {
   const {
-    medications, addMedication, removeMedication, reorderMedications,
+    medications, addMedication, removeMedication, updateMedication, reorderMedications,
     dropdownOptions, getTemplatesByType, addTemplate, updateTemplate, deleteTemplate, applyTemplate,
   } = usePrescription();
   const ddMed = dropdownOptions?.medication;
+
+  const searchMedName = useCallback(async (q: string): Promise<SearchOption[]> => {
+    const res = await mastersApi.getMedications(q);
+    return (res.data || []).map(m => ({
+      label: m.brandName,
+      secondary: `${m.genericName} — ${m.form} ${m.strength}`,
+      payload: { brandName: m.brandName, genericName: m.genericName, form: m.form, strength: m.strength },
+    }));
+  }, []);
+
+  const formOptions: CellOption[] = FORMS.map(f => ({ value: f, label: f }));
+  const dosageOptions: CellOption[] = (ddMed?.dosage?.length
+    ? ddMed.dosage.map(o => ({ value: o.option_value, label: o.option_value, id: o.dropdown_option_id }))
+    : FALLBACK_DOSAGES.map(d => ({ value: d, label: d })));
+  const frequencyOptions: CellOption[] = (ddMed?.frequency?.length
+    ? ddMed.frequency.map(o => ({ value: o.option_value, label: o.option_value, id: o.dropdown_option_id }))
+    : FALLBACK_FREQUENCIES.map(f => ({ value: f, label: f })));
+  const timingOptions: CellOption[] = (ddMed?.timing?.length
+    ? ddMed.timing.map(o => ({ value: o.option_value, label: o.option_value, id: o.dropdown_option_id }))
+    : FALLBACK_TIMINGS.map(t => ({ value: t, label: t })));
+  const durationOptions: CellOption[] = (ddMed?.duration?.length
+    ? ddMed.duration.map(o => ({ value: o.option_value, label: o.option_value, id: o.dropdown_option_id }))
+    : FALLBACK_DURATIONS.map(d => ({ value: d, label: d })));
   const [searchTerm, setSearchTerm] = useState('');
   const [newMed, setNewMed] = useState<Medication>({ ...emptyMed });
   const [showFrequent, setShowFrequent] = useState(false);
@@ -296,19 +321,19 @@ export default function MedicationSection() {
       </Box>
 
       {medications.length > 0 && (
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: 'fixed' }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 40, p: 0.5 }} />
-              <TableCell>#</TableCell>
+              <TableCell sx={{ width: 36, p: 0.5 }} />
+              <TableCell sx={{ width: 36 }}>#</TableCell>
               <TableCell>Drug</TableCell>
-              <TableCell>Form</TableCell>
-              <TableCell>Dosage</TableCell>
-              <TableCell>Frequency</TableCell>
-              <TableCell>Timing</TableCell>
-              <TableCell>Duration</TableCell>
-              <TableCell>Qty</TableCell>
-              <TableCell sx={{ width: 50 }} />
+              <TableCell sx={{ width: 100 }}>Form</TableCell>
+              <TableCell sx={{ width: 90 }}>Dosage</TableCell>
+              <TableCell sx={{ width: 120 }}>Frequency</TableCell>
+              <TableCell sx={{ width: 110 }}>Timing</TableCell>
+              <TableCell sx={{ width: 90 }}>Duration</TableCell>
+              <TableCell sx={{ width: 60 }}>Qty</TableCell>
+              <TableCell sx={{ width: 44 }} />
             </TableRow>
           </TableHead>
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -339,15 +364,67 @@ export default function MedicationSection() {
                           </TableCell>
                           <TableCell>{i + 1}</TableCell>
                           <TableCell>
-                            <Typography variant="body2" fontWeight={500}>{m.brandName}</Typography>
-                            {m.genericName && <Typography variant="caption" color="text.secondary">{m.genericName}</Typography>}
+                            <InlineEditableName
+                              value={m.brandName}
+                              secondary={m.genericName}
+                              searchFn={searchMedName}
+                              placeholder="Search drug..."
+                              onRename={(name) => updateMedication(i, { ...m, brandName: name })}
+                              onReplace={(opt) => {
+                                const p = opt.payload as { brandName: string; genericName: string; form: string; strength: string } | undefined;
+                                updateMedication(i, {
+                                  ...m,
+                                  brandName: p?.brandName ?? opt.label,
+                                  genericName: p?.genericName ?? m.genericName,
+                                  form: p?.form || m.form,
+                                  dosage: p?.strength || m.dosage,
+                                });
+                              }}
+                            />
                           </TableCell>
-                          <TableCell><Chip label={m.form} size="small" variant="outlined" /></TableCell>
-                          <TableCell>{m.dosage}</TableCell>
-                          <TableCell>{m.frequency}</TableCell>
-                          <TableCell>{m.timing}</TableCell>
-                          <TableCell>{m.duration}</TableCell>
-                          <TableCell>{m.qty || '-'}</TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={m.form}
+                              options={formOptions}
+                              chip
+                              onChange={(val) => updateMedication(i, { ...m, form: val })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={m.dosage || ''}
+                              options={dosageOptions}
+                              onChange={(val, opt) => updateMedication(i, { ...m, dosage: val, dosage_id: opt?.id as number | undefined })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={m.frequency || ''}
+                              options={frequencyOptions}
+                              onChange={(val, opt) => updateMedication(i, { ...m, frequency: val, frequency_id: opt?.id as number | undefined })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={m.timing || ''}
+                              options={timingOptions}
+                              onChange={(val, opt) => updateMedication(i, { ...m, timing: val, timing_id: opt?.id as number | undefined })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={m.duration || ''}
+                              options={durationOptions}
+                              onChange={(val, opt) => updateMedication(i, { ...m, duration: val, duration_id: opt?.id as number | undefined })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <InlineEditableCell
+                              value={String(m.qty || '')}
+                              type="number"
+                              onChange={(val) => updateMedication(i, { ...m, qty: Number(val) || 0 })}
+                            />
+                          </TableCell>
                           <TableCell>
                             <IconButton size="small" color="error" onClick={() => removeMedication(i)}>
                               <DeleteIcon fontSize="small" />

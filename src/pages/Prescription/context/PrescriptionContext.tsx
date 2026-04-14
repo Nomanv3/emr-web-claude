@@ -11,12 +11,13 @@ import type {
 } from '@/types';
 import { prescriptionApi } from '@/services/api';
 import {
-  fetchDropdownOptions, fetchConfiguration, fetchAllTemplates,
+  fetchDropdownOptions, fetchConfiguration, fetchAllTemplates, fetchMainTemplatesApi,
   fetchPatientDetail, fetchPrintSettingsData, savePrintSettingsData,
   createSectionTemplate, updateSectionTemplate, deleteSectionTemplate, fetchSingleTemplate,
   fetchVitalUnits, buildSubmitPayload, DEV_ORG, DEV_BRANCH, DEV_DOCTOR,
   type CollectedPrescriptionData,
 } from './prescriptionHelpers';
+import { templatesApi } from '@/services/api';
 
 // ─── Section Config ──────────────────────────────────────────────────
 export const ALL_SECTIONS = [
@@ -106,6 +107,7 @@ export interface PrescriptionActions {
   updateDiagnosis: (index: number, diagnosis: Diagnosis) => void;
   addExaminationFinding: (finding: ExaminationFinding) => void;
   removeExaminationFinding: (index: number) => void;
+  updateExaminationFinding: (index: number, finding: ExaminationFinding) => void;
   addMedication: (medication: Medication) => void;
   removeMedication: (index: number) => void;
   updateMedication: (index: number, medication: Medication) => void;
@@ -114,6 +116,7 @@ export interface PrescriptionActions {
   updateLabInvestigation: (index: number, lab: LabInvestigation) => void;
   addLabResult: (result: LabResult) => void;
   removeLabResult: (index: number) => void;
+  updateLabResult: (index: number, result: LabResult) => void;
   updateMedicalCondition: (index: number, condition: MedicalCondition) => void;
   setMedicalConditions: (conditions: MedicalCondition[]) => void;
   setNoRelevantHistory: (value: boolean) => void;
@@ -142,6 +145,12 @@ export interface PrescriptionActions {
   deleteTemplate: (templateId: string, templateType: string) => Promise<boolean>;
   applyTemplate: (templateId: string, type: string) => Promise<void>;
   getTemplatesByType: (type: string) => PrescriptionTemplate[];
+  // Main template (full-prescription) actions
+  refreshMainTemplates: () => Promise<void>;
+  saveAsMainTemplate: (name: string) => Promise<boolean>;
+  renameMainTemplate: (templateId: string, name: string) => Promise<boolean>;
+  deleteMainTemplate: (templateId: string) => Promise<boolean>;
+  applyMainTemplate: (templateId: string) => void;
   savePrintSettings: (settings: Record<string, boolean>) => Promise<void>;
   reorderSymptoms: (symptoms: Symptom[]) => void;
   reorderMedications: (medications: Medication[]) => void;
@@ -186,10 +195,11 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     initRef.current = true;
 
     const init = async () => {
-      const [ddOpts, config, templates, printSettings, vUnits] = await Promise.all([
+      const [ddOpts, config, templates, mainTmpls, printSettings, vUnits] = await Promise.all([
         fetchDropdownOptions(),
         fetchConfiguration(),
         fetchAllTemplates(),
+        fetchMainTemplatesApi(),
         fetchPrintSettingsData(),
         fetchVitalUnits(),
       ]);
@@ -198,6 +208,7 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
         const updates: Partial<PrescriptionState> = {};
         if (ddOpts) updates.dropdownOptions = ddOpts;
         if (templates) updates.templates = templates;
+        if (mainTmpls) updates.mainTemplates = mainTmpls;
         if (printSettings) updates.printEnabledSections = printSettings;
         if (vUnits) updates.vitalUnits = vUnits;
         if (config) {
@@ -296,6 +307,7 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
   const updateDiagnosis = useCallback((i: number, d: Diagnosis) => updateItem('diagnoses', i, d), [updateItem]);
   const addExaminationFinding = useCallback((f: ExaminationFinding) => addItem('examinationFindings', f), [addItem]);
   const removeExaminationFinding = useCallback((i: number) => removeItem('examinationFindings', i), [removeItem]);
+  const updateExaminationFinding = useCallback((i: number, f: ExaminationFinding) => updateItem('examinationFindings', i, f), [updateItem]);
   const addMedication = useCallback((m: Medication) => addItem('medications', m), [addItem]);
   const removeMedication = useCallback((i: number) => removeItem('medications', i), [removeItem]);
   const updateMedication = useCallback((i: number, m: Medication) => updateItem('medications', i, m), [updateItem]);
@@ -304,6 +316,7 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
   const updateLabInvestigation = useCallback((i: number, l: LabInvestigation) => updateItem('labInvestigations', i, l), [updateItem]);
   const addLabResult = useCallback((r: LabResult) => addItem('labResults', r), [addItem]);
   const removeLabResult = useCallback((i: number) => removeItem('labResults', i), [removeItem]);
+  const updateLabResult = useCallback((i: number, r: LabResult) => updateItem('labResults', i, r), [updateItem]);
   const addProcedure = useCallback((p: ProcedureEntry) => addItem('procedures', p), [addItem]);
   const removeProcedure = useCallback((i: number) => removeItem('procedures', i), [removeItem]);
   const addCustomSection = useCallback((s: CustomSection) => addItem('customSections', s), [addItem]);
@@ -464,6 +477,94 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     return state.templates.filter(t => t.type === type);
   }, [state.templates]);
 
+  // ─── Main Templates (full-prescription reusable templates) ────────
+  const refreshMainTemplates = useCallback(async () => {
+    const list = await fetchMainTemplatesApi();
+    setState(s => ({ ...s, mainTemplates: list }));
+  }, []);
+
+  const saveAsMainTemplate = useCallback(async (name: string): Promise<boolean> => {
+    try {
+      const data = collectPrescriptionData();
+      await templatesApi.createTemplate({
+        organization_id: DEV_ORG, branch_id: DEV_BRANCH, doctor_id: DEV_DOCTOR,
+        name, type: 'main',
+        items: [data as unknown as Record<string, unknown>],
+        created_by: DEV_DOCTOR, updated_by: DEV_DOCTOR,
+      });
+      await refreshMainTemplates();
+      toast.success(`Template "${name}" saved`);
+      return true;
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
+        : undefined;
+      toast.error(msg || 'Failed to save template');
+      return false;
+    }
+  }, [collectPrescriptionData, refreshMainTemplates]);
+
+  const renameMainTemplate = useCallback(async (templateId: string, name: string): Promise<boolean> => {
+    try {
+      await templatesApi.updateTemplate({
+        template_id: templateId, name, type: 'main',
+        organization_id: DEV_ORG, branch_id: DEV_BRANCH, updated_by: DEV_DOCTOR,
+      });
+      await refreshMainTemplates();
+      toast.success('Template renamed');
+      return true;
+    } catch {
+      toast.error('Failed to rename template');
+      return false;
+    }
+  }, [refreshMainTemplates]);
+
+  const deleteMainTemplate = useCallback(async (templateId: string): Promise<boolean> => {
+    try {
+      await templatesApi.deleteTemplate({
+        organization_id: DEV_ORG, branch_id: DEV_BRANCH,
+        template_id: templateId, template_type: 'main',
+      });
+      await refreshMainTemplates();
+      toast.success('Template deleted');
+      return true;
+    } catch {
+      toast.error('Failed to delete template');
+      return false;
+    }
+  }, [refreshMainTemplates]);
+
+  const applyMainTemplate = useCallback((templateId: string) => {
+    const tmpl = state.mainTemplates.find(t => t.templateId === templateId);
+    if (!tmpl) { toast.error('Template not found'); return; }
+    const raw = (tmpl.items as Record<string, unknown>[] | undefined)
+      || ((tmpl.data as Record<string, unknown>)?.items as Record<string, unknown>[] | undefined);
+    const tmplData = raw && raw.length ? raw[0] : null;
+    if (!tmplData) { toast.error('Template has no data'); return; }
+    const d = tmplData as Record<string, unknown>;
+    const notes = (d.notes as Record<string, string> | undefined) || {};
+    const mapped: Partial<PrescriptionState> = {
+      vitals: (d.vitals as Vitals) || {},
+      symptoms: (d.symptoms as Symptom[]) || [],
+      diagnoses: (d.diagnoses as Diagnosis[]) || [],
+      examinationFindings: (d.examinationFindings as ExaminationFinding[]) || [],
+      medications: (d.medications as Medication[]) || [],
+      labInvestigations: (d.labInvestigations as LabInvestigation[]) || [],
+      labResults: (d.labResults as LabResult[]) || [],
+      procedures: (d.procedures as ProcedureEntry[]) || [],
+      followUp: (d.followUp as FollowUp) || null,
+      referral: (d.referral as Referral) || null,
+      advice: (d.advice as string) || '',
+      surgicalNotes: (d.surgicalNotes as string) || notes.surgicalNotes || '',
+      privateNotes: (d.privateNotes as string) || notes.privateNotes || '',
+      customSections: (d.customSections as CustomSection[]) || [],
+      medicalConditions: (d.medicalConditions as MedicalCondition[]) || [...DEFAULT_CONDITIONS],
+      noRelevantHistory: Boolean(d.noRelevantHistory),
+    };
+    setState(s => ({ ...s, ...mapped }));
+    toast.success(`Applied "${tmpl.name}"`);
+  }, [state.mainTemplates]);
+
   // ─── Print Settings ───────────────────────────────────────────────
   const savePrintSettings = useCallback(async (settings: Record<string, boolean>) => {
     const ok = await savePrintSettingsData(settings);
@@ -497,10 +598,10 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     updateVitals, setVitals: setVitalsAction, toggleVitalLock,
     addSymptom, removeSymptom, updateSymptom,
     addDiagnosis, removeDiagnosis, updateDiagnosis,
-    addExaminationFinding, removeExaminationFinding,
+    addExaminationFinding, removeExaminationFinding, updateExaminationFinding,
     addMedication, removeMedication, updateMedication,
     addLabInvestigation, removeLabInvestigation, updateLabInvestigation,
-    addLabResult, removeLabResult,
+    addLabResult, removeLabResult, updateLabResult,
     updateMedicalCondition, setMedicalConditions, setNoRelevantHistory,
     addProcedure, removeProcedure,
     setFollowUp, setReferral,
@@ -512,6 +613,7 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     clearAllPrescription, addTemplate, updateTemplate: updateTemplateAction,
     deleteTemplate: deleteTemplateAction,
     applyTemplate, getTemplatesByType, savePrintSettings,
+    refreshMainTemplates, saveAsMainTemplate, renameMainTemplate, deleteMainTemplate, applyMainTemplate,
     reorderSymptoms, reorderMedications, reorderDiagnoses,
     reorderExaminationFindings, reorderLabInvestigations, reorderLabResults,
     reorderProcedures, reorderCustomSections, refreshPrintSettings,
@@ -519,10 +621,10 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     state, setPatient, setLanguage, setActiveSection, setIsEditing, setIsSaving, setPrescriptionId,
     updateVitals, setVitalsAction, toggleVitalLock, addSymptom, removeSymptom, updateSymptom,
     addDiagnosis, removeDiagnosis, updateDiagnosis,
-    addExaminationFinding, removeExaminationFinding,
+    addExaminationFinding, removeExaminationFinding, updateExaminationFinding,
     addMedication, removeMedication, updateMedication,
     addLabInvestigation, removeLabInvestigation, updateLabInvestigation,
-    addLabResult, removeLabResult, updateMedicalCondition, setNoRelevantHistory,
+    addLabResult, removeLabResult, updateLabResult, updateMedicalCondition, setNoRelevantHistory,
     addProcedure, removeProcedure, setFollowUp, setReferral,
     setAdvice, setSurgicalNotes, setPrivateNotes,
     addCustomSection, removeCustomSection, updateCustomSection,
@@ -530,6 +632,7 @@ export function PrescriptionProvider({ children }: { children: ReactNode }) {
     collectPrescriptionData, submitPrescription, updatePrescriptionApi,
     clearAllPrescription, addTemplate, updateTemplateAction,
     deleteTemplateAction, applyTemplate, getTemplatesByType, savePrintSettings,
+    refreshMainTemplates, saveAsMainTemplate, renameMainTemplate, deleteMainTemplate, applyMainTemplate,
     reorderSymptoms, reorderMedications, reorderDiagnoses,
     reorderExaminationFindings, reorderLabInvestigations, reorderLabResults,
     reorderProcedures, reorderCustomSections, refreshPrintSettings,

@@ -7,6 +7,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Card, CardContent, Grid, Divider, Chip,
   IconButton, Tooltip, Paper,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  List, ListItem, ListItemText, CircularProgress, InputAdornment,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -19,12 +21,21 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import HomeIcon from '@mui/icons-material/Home';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
+import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
+import SearchIcon from '@mui/icons-material/Search';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SaveIcon from '@mui/icons-material/Save';
+import CloseIcon from '@mui/icons-material/Close';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import PrescriptionPdf, { downloadPdfFromUrl } from './components/PrescriptionPdf';
 import type { PrescriptionPdfData } from './components/PrescriptionPdf';
-import type { PatientInfo, DropdownOptions, PrescriptionLanguage } from '@/types';
-import { whatsappApi } from '@/services/api';
+import type { PatientInfo, DropdownOptions, PrescriptionLanguage, PrescriptionTemplate } from '@/types';
+import { whatsappApi, templatesApi } from '@/services/api';
+import { DEV_ORG, DEV_BRANCH, DEV_DOCTOR } from './context/prescriptionHelpers';
+
+const EDIT_PAGE_SIZE = 6;
 
 const MotionBox = motion.create(Box);
 
@@ -47,6 +58,22 @@ export default function AddPrescriptionPage() {
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
   const [sharingWhatsapp, setSharingWhatsapp] = useState(false);
+
+  // Save-as-template dialog
+  const [saveTmplOpen, setSaveTmplOpen] = useState(false);
+  const [tmplName, setTmplName] = useState('');
+  const [savingTmpl, setSavingTmpl] = useState(false);
+
+  // Edit-existing-template dialog (rename / delete — does NOT apply)
+  const [editTmplOpen, setEditTmplOpen] = useState(false);
+  const [existingTemplates, setExistingTemplates] = useState<PrescriptionTemplate[]>([]);
+  const [loadingTmpls, setLoadingTmpls] = useState(false);
+  const [editSearch, setEditSearch] = useState('');
+  const [editVisibleCount, setEditVisibleCount] = useState(EDIT_PAGE_SIZE);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [savingRename, setSavingRename] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handlePdfReady = useCallback((dataUrl: string) => {
     setPdfDataUrl(dataUrl);
@@ -171,6 +198,128 @@ export default function AddPrescriptionPage() {
     });
   }, [patientId, prescriptionId, prescriptionData, navigate]);
 
+  // Save current prescription as a reusable main template
+  const handleSaveAsTemplate = useCallback(async () => {
+    const name = tmplName.trim();
+    if (!name) { toast.error('Please enter a template name'); return; }
+    if (!prescriptionData) { toast.error('No prescription data to save'); return; }
+    setSavingTmpl(true);
+    try {
+      await templatesApi.createTemplate({
+        organization_id: DEV_ORG,
+        branch_id: DEV_BRANCH,
+        doctor_id: DEV_DOCTOR,
+        name,
+        type: 'main',
+        items: [prescriptionData as unknown as Record<string, unknown>],
+        created_by: DEV_DOCTOR,
+        updated_by: DEV_DOCTOR,
+      });
+      toast.success(`Template "${name}" saved`);
+      setSaveTmplOpen(false);
+      setTmplName('');
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
+        : undefined;
+      toast.error(msg || 'Failed to save template');
+    } finally {
+      setSavingTmpl(false);
+    }
+  }, [tmplName, prescriptionData]);
+
+  const loadTemplates = useCallback(async () => {
+    setLoadingTmpls(true);
+    try {
+      const res = await templatesApi.getMainTemplates({
+        organization_id: DEV_ORG,
+        branch_id: DEV_BRANCH,
+      });
+      const data = res.data as unknown;
+      const list = Array.isArray(data)
+        ? (data as PrescriptionTemplate[])
+        : (data && typeof data === 'object' && 'templates' in data)
+          ? (data as { templates: PrescriptionTemplate[] }).templates
+          : [];
+      setExistingTemplates(list);
+    } catch {
+      toast.error('Failed to load templates');
+      setExistingTemplates([]);
+    } finally {
+      setLoadingTmpls(false);
+    }
+  }, []);
+
+  // Open "Edit Existing" dialog — fetch user's main templates
+  const handleOpenEditExisting = useCallback(() => {
+    setEditTmplOpen(true);
+    setEditSearch('');
+    setEditVisibleCount(EDIT_PAGE_SIZE);
+    setEditingId(null);
+    setEditingName('');
+    loadTemplates();
+  }, [loadTemplates]);
+
+  // Begin inline editing (rename)
+  const handleStartRename = useCallback((tmpl: PrescriptionTemplate) => {
+    setEditingId(tmpl.templateId);
+    setEditingName(tmpl.name);
+  }, []);
+
+  const handleCancelRename = useCallback(() => {
+    setEditingId(null);
+    setEditingName('');
+  }, []);
+
+  const handleSaveRename = useCallback(async () => {
+    if (!editingId) return;
+    const name = editingName.trim();
+    if (!name) { toast.error('Name cannot be empty'); return; }
+    setSavingRename(true);
+    try {
+      await templatesApi.updateTemplate({
+        template_id: editingId, name, type: 'main',
+        organization_id: DEV_ORG, branch_id: DEV_BRANCH, updated_by: DEV_DOCTOR,
+      });
+      toast.success('Template renamed');
+      setEditingId(null);
+      setEditingName('');
+      await loadTemplates();
+    } catch {
+      toast.error('Failed to rename template');
+    } finally {
+      setSavingRename(false);
+    }
+  }, [editingId, editingName, loadTemplates]);
+
+  const handleDeleteTemplate = useCallback(async (templateId: string) => {
+    setDeletingId(templateId);
+    try {
+      await templatesApi.deleteTemplate({
+        organization_id: DEV_ORG, branch_id: DEV_BRANCH,
+        template_id: templateId, template_type: 'main',
+      });
+      toast.success('Template deleted');
+      await loadTemplates();
+    } catch {
+      toast.error('Failed to delete template');
+    } finally {
+      setDeletingId(null);
+    }
+  }, [loadTemplates]);
+
+  // Client-side search + pagination for Edit dialog
+  const filteredEditTemplates = useMemo(() => {
+    if (!editSearch.trim()) return existingTemplates;
+    const q = editSearch.toLowerCase();
+    return existingTemplates.filter(t => t.name.toLowerCase().includes(q));
+  }, [existingTemplates, editSearch]);
+
+  const visibleEditTemplates = useMemo(
+    () => filteredEditTemplates.slice(0, editVisibleCount),
+    [filteredEditTemplates, editVisibleCount],
+  );
+
   const pdfData = useMemo(() => prescriptionData || null, [prescriptionData]);
 
   return (
@@ -178,13 +327,13 @@ export default function AddPrescriptionPage() {
       {/* ── Top Bar ── */}
       <Box
         sx={{
-          background: 'linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #42a5f5 100%)',
+          background: 'linear-gradient(135deg, #0D7C66 0%, #17B890 100%)',
           px: 3, py: 1.5,
           display: 'flex', alignItems: 'center', gap: 2,
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         }}
       >
-        <Tooltip title="Back to Dashboard">
+        <Tooltip title="Back to Queue">
           <IconButton onClick={() => navigate('/')} sx={{ color: '#fff' }}>
             <HomeIcon />
           </IconButton>
@@ -257,15 +406,19 @@ export default function AddPrescriptionPage() {
                   NAVIGATION
                 </Typography>
 
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<ArrowBackIcon />}
-                  onClick={() => navigate('/')}
-                  sx={{ justifyContent: 'flex-start', py: 1 }}
-                >
-                  Back to Dashboard
-                </Button>
+                <Tooltip title="Back to Queue">
+                  <IconButton
+                    onClick={() => navigate('/')}
+                    sx={{
+                      alignSelf: 'flex-start',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <ArrowBackIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 {patientId && (
                   <>
                     <Button
@@ -290,12 +443,24 @@ export default function AddPrescriptionPage() {
                     </Button>
                     <Button
                       fullWidth
-                      variant="text"
-                      startIcon={<PersonIcon />}
-                      onClick={() => navigate(`/patient/${patientId}`)}
+                      variant="outlined"
+                      color="success"
+                      startIcon={<BookmarkAddIcon />}
+                      onClick={() => setSaveTmplOpen(true)}
+                      sx={{ justifyContent: 'flex-start', py: 1 }}
+                      disabled={!prescriptionData}
+                    >
+                      Save as Template
+                    </Button>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      color="info"
+                      startIcon={<PlaylistPlayIcon />}
+                      onClick={handleOpenEditExisting}
                       sx={{ justifyContent: 'flex-start', py: 1 }}
                     >
-                      View Patient Profile
+                      Edit Existing
                     </Button>
                   </>
                 )}
@@ -351,6 +516,177 @@ export default function AddPrescriptionPage() {
           </Grid>
         </Grid>
       </Box>
+
+      {/* Save as Template dialog */}
+      <Dialog open={saveTmplOpen} onClose={() => !savingTmpl && setSaveTmplOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Save as Template</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Save this prescription as a reusable template.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Template name"
+            value={tmplName}
+            onChange={(e) => setTmplName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !savingTmpl) handleSaveAsTemplate(); }}
+            disabled={savingTmpl}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setSaveTmplOpen(false)} color="inherit" disabled={savingTmpl}>Cancel</Button>
+          <Button
+            onClick={handleSaveAsTemplate}
+            variant="contained"
+            disabled={savingTmpl || !tmplName.trim()}
+            startIcon={savingTmpl ? <CircularProgress size={16} /> : <BookmarkAddIcon />}
+          >
+            {savingTmpl ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Existing Templates dialog — rename / delete only (no apply) */}
+      <Dialog open={editTmplOpen} onClose={() => setEditTmplOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Edit Templates
+          <Typography variant="caption" display="block" color="text.secondary" sx={{ fontWeight: 400 }}>
+            Rename or delete saved templates. To apply a template, use the Templates dropdown in the prescription pad.
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 2, minHeight: 280 }}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Search templates..."
+            value={editSearch}
+            onChange={(e) => { setEditSearch(e.target.value); setEditVisibleCount(EDIT_PAGE_SIZE); }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ mb: 2 }}
+          />
+
+          {loadingTmpls ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : filteredEditTemplates.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4, px: 3 }}>
+              <Typography color="text.secondary" variant="body2">
+                {editSearch ? 'No matching templates' : 'No saved templates yet. Use "Save as Template" to create one.'}
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <List dense disablePadding>
+                {visibleEditTemplates.map((tmpl) => {
+                  const isEditing = editingId === tmpl.templateId;
+                  const isDeleting = deletingId === tmpl.templateId;
+                  return (
+                    <ListItem
+                      key={tmpl.templateId}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        mb: 1,
+                        bgcolor: isEditing ? 'action.hover' : 'background.paper',
+                      }}
+                      secondaryAction={
+                        isEditing ? (
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title="Save">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={handleSaveRename}
+                                  disabled={savingRename || !editingName.trim()}
+                                >
+                                  {savingRename ? <CircularProgress size={16} /> : <SaveIcon fontSize="small" />}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Cancel">
+                              <IconButton size="small" onClick={handleCancelRename} disabled={savingRename}>
+                                <CloseIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title="Rename">
+                              <IconButton size="small" onClick={() => handleStartRename(tmpl)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDeleteTemplate(tmpl.templateId)}
+                                  disabled={isDeleting}
+                                >
+                                  {isDeleting ? <CircularProgress size={16} /> : <DeleteOutlineIcon fontSize="small" />}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Box>
+                        )
+                      }
+                    >
+                      {isEditing ? (
+                        <TextField
+                          size="small"
+                          fullWidth
+                          autoFocus
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !savingRename) handleSaveRename();
+                            if (e.key === 'Escape') handleCancelRename();
+                          }}
+                          disabled={savingRename}
+                          sx={{ mr: 10 }}
+                        />
+                      ) : (
+                        <ListItemText
+                          primary={tmpl.name}
+                          primaryTypographyProps={{ fontWeight: 600 }}
+                        />
+                      )}
+                    </ListItem>
+                  );
+                })}
+              </List>
+              {editVisibleCount < filteredEditTemplates.length && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setEditVisibleCount(c => c + EDIT_PAGE_SIZE)}
+                    sx={{ fontWeight: 600 }}
+                  >
+                    Show More ({filteredEditTemplates.length - editVisibleCount} more)
+                  </Button>
+                </Box>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setEditTmplOpen(false)} color="inherit">Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -10,10 +10,12 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import DownloadIcon from '@mui/icons-material/Download';
 import PrintIcon from '@mui/icons-material/Print';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { toast } from 'sonner';
 import PrescriptionPdf, { downloadPdfFromUrl } from '@/pages/Prescription/components/PrescriptionPdf';
 import type { PrescriptionPdfData } from '@/pages/Prescription/components/PrescriptionPdf';
 import type { Prescription, Patient, PatientInfo } from '@/types';
+import { whatsappApi } from '@/services/api';
 
 interface PatientPrescriptionPDFProps {
   prescription: Prescription;
@@ -24,6 +26,7 @@ interface PatientPrescriptionPDFProps {
 
 export default function PatientPrescriptionPDF({ prescription, patient, open, onClose }: PatientPrescriptionPDFProps) {
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
+  const [sharingWhatsapp, setSharingWhatsapp] = useState(false);
 
   const pdfData: PrescriptionPdfData = useMemo(() => ({
     vitals: prescription.vitals || {},
@@ -97,6 +100,58 @@ export default function PatientPrescriptionPDF({ prescription, patient, open, on
     }
   }, [pdfDataUrl]);
 
+  const handleShareWhatsapp = useCallback(async () => {
+    if (!patient?.phone) {
+      toast.info('No patient phone number available');
+      return;
+    }
+    if (!pdfDataUrl) {
+      toast.error('PDF is still generating, please wait...');
+      return;
+    }
+    if (sharingWhatsapp) return;
+
+    setSharingWhatsapp(true);
+    const toastId = toast.loading('Uploading prescription PDF...');
+    try {
+      const nameForFile = patient.name?.replace(/\s+/g, '_') || 'Patient';
+      const uploadResp = await whatsappApi.uploadPrescriptionPdf({
+        pdfBase64: pdfDataUrl,
+        filename: `Prescription_${nameForFile}.pdf`,
+      });
+      const publicUrl = uploadResp.data?.url;
+      if (!publicUrl) throw new Error('Upload did not return a URL');
+
+      const phone = patient.phone.replace(/\D/g, '');
+      const fullPhone = phone.length === 10 ? `91${phone}` : phone;
+      const patientName = patient.name || 'Patient';
+
+      const message =
+        `Your Prescription Are In!\n\n` +
+        `Hello ${patientName},\n\n` +
+        `Your Prescription results are available for review. Please find the PDF file attached to access your results:\n` +
+        `${publicUrl}\n\n` +
+        `Please feel free to reach us if you have any questions or need further assistance.\n\n` +
+        `Best regards,\nAgentQure Team`;
+
+      window.open(
+        `https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(message)}`,
+        '_blank',
+      );
+
+      toast.success('WhatsApp opened — send the message to share', { id: toastId });
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data
+              ?.error?.message
+          : undefined;
+      toast.error(msg || 'Failed to share via WhatsApp', { id: toastId });
+    } finally {
+      setSharingWhatsapp(false);
+    }
+  }, [patient, pdfDataUrl, sharingWhatsapp]);
+
   return (
     <Dialog
       open={open}
@@ -165,6 +220,24 @@ export default function PatientPrescriptionPDF({ prescription, patient, open, on
           >
             Download
           </Button>
+        </Tooltip>
+        <Tooltip title={patient?.phone ? `Share via WhatsApp to ${patient.phone}` : 'No patient phone available'}>
+          <span>
+            <Button
+              startIcon={<WhatsAppIcon />}
+              variant="outlined"
+              size="small"
+              onClick={handleShareWhatsapp}
+              disabled={!pdfDataUrl || sharingWhatsapp || !patient?.phone}
+              sx={{
+                color: '#25D366',
+                borderColor: '#25D366',
+                '&:hover': { borderColor: '#1da851', bgcolor: 'rgba(37,211,102,0.08)' },
+              }}
+            >
+              {sharingWhatsapp ? 'Sharing...' : 'Share via WhatsApp'}
+            </Button>
+          </span>
         </Tooltip>
         <Box sx={{ flex: 1 }} />
         <Button onClick={onClose} variant="contained" size="small">Close</Button>
