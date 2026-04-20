@@ -144,21 +144,22 @@ function ConditionCard({ condition, index, onValueChange, onSinceChange }: {
         >
           {condition.name}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', gap: 0.25, flexShrink: 0 }}>
           <Button
             onClick={handleYes}
             disableElevation
             variant={isYes ? 'contained' : 'outlined'}
-            endIcon={<ThumbUpIcon sx={{ fontSize: 18 }} />}
+            endIcon={<ThumbUpIcon sx={{ fontSize: 16 }} />}
             aria-label={isYes ? 'Clear yes' : 'Mark yes'}
             sx={{
-              minWidth: 92,
-              height: 38,
-              px: 1.5,
+              minWidth: 64,
+              height: 34,
+              px: 0.75,
               borderRadius: 1.5,
               textTransform: 'none',
               fontWeight: 600,
-              fontSize: 13,
+              fontSize: 12,
+              '& .MuiButton-endIcon': { ml: 0.5 },
               bgcolor: isYes ? '#10b981' : 'background.paper',
               borderColor: isYes ? '#10b981' : '#e5e7eb',
               color: isYes ? '#fff' : '#6b7280',
@@ -177,16 +178,17 @@ function ConditionCard({ condition, index, onValueChange, onSinceChange }: {
             onClick={handleNo}
             disableElevation
             variant={isNo ? 'contained' : 'outlined'}
-            endIcon={<ThumbDownIcon sx={{ fontSize: 18 }} />}
+            endIcon={<ThumbDownIcon sx={{ fontSize: 16 }} />}
             aria-label={isNo ? 'Clear no' : 'Mark no'}
             sx={{
-              minWidth: 92,
-              height: 38,
-              px: 1.5,
+              minWidth: 64,
+              height: 34,
+              px: 0.75,
               borderRadius: 1.5,
               textTransform: 'none',
               fontWeight: 600,
-              fontSize: 13,
+              fontSize: 12,
+              '& .MuiButton-endIcon': { ml: 0.5 },
               bgcolor: isNo ? '#ef4444' : 'background.paper',
               borderColor: isNo ? '#ef4444' : '#e5e7eb',
               color: isNo ? '#fff' : '#6b7280',
@@ -1006,7 +1008,7 @@ export default function RegisterPatientDialog({ open, onClose, initialName, init
               </Box>
 
               <Collapse in={!noRelevantHistory}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1 }}>
                   {medicalConditions.map((condition, index) => (
                     <ConditionCard
                       key={`${condition.name}-${index}`}
