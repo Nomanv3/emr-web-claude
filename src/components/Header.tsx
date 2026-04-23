@@ -132,6 +132,7 @@ export default function Header() {
         borderBottom: '1px solid',
         borderColor: 'divider',
         zIndex: (t) => t.zIndex.appBar,
+        borderRadius: 0,
       }}
     >
       <Toolbar sx={{ gap: 1, minHeight: '64px !important', px: { xs: 1.5, sm: 2, md: 3 } }}>

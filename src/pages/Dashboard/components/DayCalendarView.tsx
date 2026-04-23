@@ -120,7 +120,10 @@ export default function DayCalendarView({
     }
   }, [currentSlotTime]);
 
+  const isPastDate = selectedDate < todayStr;
+
   const isPastSlot = (slotTime: string): boolean => {
+    if (isPastDate) return true; // 🔴 FULL DAY DISABLED
     if (!isToday) return false;
     return getSlotMinutes(slotTime) < nowMinutes;
   };
@@ -275,7 +278,8 @@ export default function DayCalendarView({
                       <Tooltip title="Add another patient to this slot">
                         <IconButton
                           size="small"
-                          onClick={() => onSlotClick(slot)}
+                          onClick={() => !isPastDate && onSlotClick(slot)}
+                          disabled={isPastDate}
                           sx={{
                             border: '1px dashed',
                             borderColor: 'divider',
@@ -301,7 +305,8 @@ export default function DayCalendarView({
                       size="small"
                       variant="outlined"
                       startIcon={<AddIcon />}
-                      onClick={() => onSlotClick(slot)}
+                      onClick={() => !isPastDate && onSlotClick(slot)}
+                      disabled={isPastDate}
                       sx={{
                         textTransform: 'none',
                         fontSize: '0.75rem',

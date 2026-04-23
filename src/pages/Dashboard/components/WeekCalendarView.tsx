@@ -69,7 +69,8 @@ export default function WeekCalendarView({
 }: WeekCalendarViewProps) {
   const navigate = useNavigate();
   const selectedDateObj = new Date(selectedDate + 'T00:00:00');
-
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const isPastDate = (date: string) => date < todayStr;
   // Week starts on Monday
   const weekStart = useMemo(
     () => startOfWeek(selectedDateObj, { weekStartsOn: 1 }),
@@ -178,13 +179,14 @@ export default function WeekCalendarView({
           return (
             <Box
               key={day.toISOString()}
-              onClick={() => onDateChange(format(day, 'yyyy-MM-dd'))}
+              onClick={() => !isPastDate(format(day, 'yyyy-MM-dd')) && onDateChange(format(day, 'yyyy-MM-dd'))}
               sx={{
                 p: 1,
                 textAlign: 'center',
                 borderRight: '1px solid',
                 borderColor: 'divider',
-                cursor: 'pointer',
+                cursor: isPastDate(format(day, 'yyyy-MM-dd')) ? 'not-allowed' : 'pointer',
+                opacity: isPastDate(format(day, 'yyyy-MM-dd')) ? 0.5 : 1,
                 bgcolor: selected ? (theme) => alpha(theme.palette.primary.main, 0.08) : undefined,
                 '&:hover': { bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04) },
               }}
@@ -268,7 +270,9 @@ export default function WeekCalendarView({
                   const dayStr = format(day, 'yyyy-MM-dd');
                   const key = `${dayStr}-${hour}`;
                   const entries = queueByDayHour.get(key) ?? [];
-                  const isPast = isToday(day) && hour < nowHour;
+                  const isPast =
+                    isPastDate(dayStr) ||
+                    (isToday(day) && hour < nowHour);
 
                   return (
                     <Box
@@ -294,7 +298,11 @@ export default function WeekCalendarView({
                           title={`${entry.patientName} — ${entry.uhid} (${entry.status})`}
                         >
                           <Box
-                            onClick={() => navigate(`/visit-details/${entry.patientId}`)}
+                            onClick={() => {
+                              if (!isPastDate(dayStr)) {
+                                navigate(`/visit-details/${entry.patientId}`);
+                              }
+                            }}
                             sx={{
                               px: 0.75,
                               py: 0.25,
@@ -319,8 +327,10 @@ export default function WeekCalendarView({
                       {!isPast && entries.length === 0 && (
                         <Box
                           onClick={() => {
-                            onDateChange(dayStr);
-                            onSlotClick(`${String(hour).padStart(2, '0')}:00`);
+                            if (!isPastDate(dayStr)) {
+                              onDateChange(dayStr);
+                              onSlotClick(`${String(hour).padStart(2, '0')}:00`);
+                            }
                           }}
                           sx={{
                             height: '100%',
@@ -375,7 +385,10 @@ export default function WeekCalendarView({
                   {/* Empty cells for each day column */}
                   {weekDays.map((day) => {
                     const dayStr = format(day, 'yyyy-MM-dd');
-                    const isPast = isToday(day) && (hour < nowHour || (hour === nowHour && min <= new Date().getMinutes()));
+
+                    const isPast =
+                      isPastDate(dayStr) ||
+                      (isToday(day) && (hour < nowHour || (hour === nowHour && min <= new Date().getMinutes())));
                     return (
                       <Box
                         key={dayStr}
@@ -393,6 +406,7 @@ export default function WeekCalendarView({
                           '&:hover': {
                             bgcolor: isPast ? undefined : (theme) => alpha(theme.palette.primary.main, 0.04),
                           },
+                          pointerEvents: isPastDate(dayStr) ? 'none' : 'auto',
                         }}
                       />
                     );

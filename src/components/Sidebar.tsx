@@ -100,7 +100,7 @@ export default function Sidebar() {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        background: 'linear-gradient(180deg, #FAFCFB 0%, #F0F5F3 100%)',
+        // background: 'linear-gradient(180deg, #FAFCFB 0%, #F0F5F3 100%)',
       }}
     >
       {/* Clinic logo area */}
@@ -159,7 +159,7 @@ export default function Sidebar() {
         )}
       </Box>
 
-      <Divider sx={{ mx: sidebarOpen ? 2 : 1.5 }} />
+      {/* <Divider sx={{ mx: sidebarOpen ? 2 : 1.5 }} /> */}
 
       {/* Navigation */}
       <List sx={{ px: sidebarOpen ? 1.5 : 1, py: 2, flex: 1 }}>
@@ -372,6 +372,7 @@ export default function Sidebar() {
             transition: 'width 300ms cubic-bezier(0.4, 0, 0.2, 1)',
             border: 'none',
             boxShadow: '1px 0 8px rgba(0,0,0,0.04)',
+            borderRadius: 0,
           },
         }}
       >

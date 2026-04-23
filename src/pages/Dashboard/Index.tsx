@@ -249,19 +249,20 @@ export default function QueueDashboard() {
             </ToggleButton>
           </ToggleButtonGroup>
 
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setBookingOpen(true)}
-            disabled={isPastDate}
-            title={isPastDate ? 'Past dates are read-only — cannot book or check-in' : undefined}
-          >
-            {isPastDate
-              ? 'Read-only (past date)'
-              : selectedDate === todayStr
-                ? 'Check-in / Book'
-                : 'Book Appointment'}
-          </Button>
+          {
+            !isPastDate && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setBookingOpen(true)}
+                disabled={isPastDate}
+                title={isPastDate ? 'Past dates are read-only — cannot book or check-in' : undefined}
+              >
+                {selectedDate === todayStr
+                  ? 'Check-in / Book'
+                  : 'Book Appointment'}
+              </Button>
+            )}
         </Box>
       </Box>
 

@@ -6,6 +6,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { DateCalendar, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format, parse, isValid } from 'date-fns';
+import { startOfWeek, endOfWeek, subDays } from 'date-fns';
 
 type Props = {
   startDate: string;
@@ -14,6 +15,28 @@ type Props = {
   label?: string;
 };
 
+const getToday = () => {
+  const d = new Date();
+  return { start: d, end: d };
+};
+
+const getYesterday = () => {
+  const d = subDays(new Date(), 1);
+  return { start: d, end: d };
+};
+
+const getCurrentWeek = () => {
+  return {
+    start: startOfWeek(new Date(), { weekStartsOn: 1 }),
+    end: new Date(),
+  };
+};
+
+const getPreviousWeek = () => {
+  const start = startOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 });
+  const end = endOfWeek(subDays(new Date(), 7), { weekStartsOn: 1 });
+  return { start, end };
+};
 const toISO = (d: Date) => format(d, 'yyyy-MM-dd');
 const toDisplay = (iso: string) => {
   if (!iso) return '';
@@ -47,6 +70,31 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
 
   const canApply = !!(tempStart && tempEnd);
 
+  const applyPreset = (type: 'today' | 'yesterday' | 'currentWeek' | 'previousWeek' | 'reset') => {
+    let range;
+
+    switch (type) {
+      case 'today':
+        range = getToday();
+        break;
+      case 'yesterday':
+        range = getYesterday();
+        break;
+      case 'currentWeek':
+        range = getCurrentWeek();
+        break;
+      case 'previousWeek':
+        range = getPreviousWeek();
+        break;
+      case 'reset':
+        range = getToday();
+        break;
+    }
+
+    setTempStart(range.start);
+    setTempEnd(range.end);
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box ref={anchorRef} sx={{ display: 'flex', alignItems: 'center', gap: 0 }}>
@@ -75,8 +123,8 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
             border: '1px solid',
             borderColor: 'divider',
             borderLeft: 'none',
-            borderTopRightRadius: 4,
-            borderBottomRightRadius: 4,
+            borderTopRightRadius: 8,
+            borderBottomRightRadius: 8,
             bgcolor: 'primary.main',
             color: '#fff',
             '&:hover': { bgcolor: 'primary.dark' },
@@ -92,7 +140,7 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
         anchorEl={anchorRef.current}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { mt: 1, borderRadius: 2, boxShadow: 8 } } }}
+        slotProps={{ paper: { sx: { mt: 1, borderRadius: 2, boxShadow: 8, px: 1.5, pt: 1, pb: 0.5 } } }}
       >
         <Box sx={{ p: 2, minWidth: 680 }}>
           <Box sx={{ display: 'flex', gap: 3 }}>
@@ -106,6 +154,7 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
                   {tempStart ? format(tempStart, 'dd-MM-yyyy') : '—'}
                 </Typography>
               </Box>
+              <Divider orientation="horizontal" flexItem />
               <DateCalendar
                 value={tempStart}
                 onChange={(d) => setTempStart(d)}
@@ -113,7 +162,7 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
               />
             </Box>
 
-            <Divider orientation="vertical" flexItem />
+            {/* <Divider orientation="vertical" flexItem /> */}
 
             {/* End Calendar */}
             <Box sx={{ flex: 1 }}>
@@ -125,6 +174,7 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
                   {tempEnd ? format(tempEnd, 'dd-MM-yyyy') : '—'}
                 </Typography>
               </Box>
+              <Divider orientation="horizontal" flexItem />
               <DateCalendar
                 value={tempEnd}
                 onChange={(d) => setTempEnd(d)}
@@ -132,7 +182,65 @@ export default function DateRangePickerInput({ startDate, endDate, onApply, labe
                 sx={{ width: '100%', maxHeight: 320 }}
               />
             </Box>
+
+            <Divider orientation="vertical" flexItem />
+
+            <Box
+              sx={{
+                width: 150,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                borderColor: 'divider',
+              }}
+            >
+              {/* Top Presets */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {[
+                  { label: 'Today', key: 'today' },
+                  { label: 'Yesterday', key: 'yesterday' },
+                  { label: 'Current Week', key: 'currentWeek' },
+                  { label: 'Previous Week', key: 'previousWeek' },
+                ].map((item) => (
+                  <Button
+                    key={item.key}
+                    size="small"
+                    variant='outlined'
+                    onClick={() => applyPreset(item.key as any)}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      textTransform: 'none',
+                      fontSize: 13,
+                      mb: 0.5,
+                      pl: 1.0,
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Box>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Button
+                  variant='outlined'
+                  color="error"
+                  size="small"
+                  onClick={() => applyPreset('reset')}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    mb: 0.5,
+                    pl: 1.0,
+                    textAlign: 'center',
+                  }}
+                >
+                  Reset
+                </Button>
+              </Box>
+            </Box>
+
           </Box>
+
 
           <Divider sx={{ my: 1.5 }} />
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>

@@ -15,6 +15,9 @@ import {
   Chip,
   Avatar,
   Skeleton,
+  MenuItem,
+  Select,
+  TextField,
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
@@ -30,6 +33,7 @@ import { useCurrentDate } from '@/hooks/useCurrentDate';
 import type { Patient } from '@/types';
 import RegisterPatientDialog from './components/RegisterPatientDialog';
 import DateRangePickerInput from '@/components/DateRangePickerInput';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
 
 function getAge(dob: string): string {
   if (!dob) return '-';
@@ -46,10 +50,23 @@ function genderLabel(g: string): string {
 }
 
 function formatGroupDate(localDay: string): string {
-  // localDay is 'yyyy-MM-dd' in local time. Format: "14 Apr 2026".
   if (!localDay || localDay === 'unknown') return 'Unknown';
+
   const [y, m, d] = localDay.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (isSameDay(dt, today)) return 'Today';
+  if (isSameDay(dt, yesterday)) return 'Yesterday';
+
   return format(dt, 'dd MMM yyyy');
 }
 
@@ -62,21 +79,22 @@ const HEADER_CELL_SX = {
 };
 
 const COL_WIDTHS = {
-  uhid: '12%',
-  name: '22%',
-  age: '11%',
-  phone: '13%',
-  blood: '10%',
-  tags: '18%',
-  regOn: '14%',
+  uhid: '10%',
+  name: '20%',      // slightly reduced but still dominant
+  phone: '12%',
+  tags: '10%',
+  regOn: '10%',
+  lastVisit: '8%',
+  status: '8%',     // increased for chip
+  actions: '16%',   // 🔥 enough for 2–3 buttons
 };
 
 function SkeletonRows() {
   return (
     <>
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 8 }).map((_, i) => (
         <TableRow key={i}>
-          {Array.from({ length: 7 }).map((__, j) => (
+          {Array.from({ length: 8 }).map((__, j) => (
             <TableCell key={j}><Skeleton height={24} /></TableCell>
           ))}
         </TableRow>
@@ -101,7 +119,8 @@ export default function PatientList() {
   const [dateFrom, setDateFrom] = useState(sevenDaysAgoStr);
   const [dateTo, setDateTo] = useState(todayStr);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-
+  const [sortBy, setSortBy] = useState<'name' | 'createdAt'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const toggleGroup = (day: string) => {
     setOpenGroups((prev) => ({ ...prev, [day]: !prev[day] }));
   };
@@ -139,17 +158,60 @@ export default function PatientList() {
   const patients: Patient[] = data?.data?.patients ?? [];
   const total = data?.data?.total ?? 0;
 
+  const sortedPatients = useMemo(() => {
+    const arr = [...patients];
+
+    arr.sort((a, b) => {
+      if (sortBy === 'name') {
+        const res = a.name.localeCompare(b.name);
+        return sortOrder === 'asc' ? res : -res;
+      }
+
+      if (sortBy === 'createdAt') {
+        const res =
+          new Date(a.createdAt).getTime() -
+          new Date(b.createdAt).getTime();
+        return sortOrder === 'asc' ? res : -res;
+      }
+
+      return 0;
+    });
+
+    return arr;
+  }, [patients, sortBy, sortOrder]);
   // Group patients by createdAt date (YYYY-MM-DD). Sorted newest first.
   const grouped = useMemo(() => {
     const byDay = new Map<string, Patient[]>();
-    for (const p of patients) {
+    for (const p of sortedPatients) {
       const key = p.createdAt ? format(new Date(p.createdAt), 'yyyy-MM-dd') : 'unknown';
       const arr = byDay.get(key) ?? [];
       arr.push(p);
       byDay.set(key, arr);
     }
     return Array.from(byDay.entries()).sort(([a], [b]) => (a < b ? 1 : -1));
-  }, [patients]);
+  }, [sortedPatients]);
+
+  const handleSort = (field: 'name' | 'createdAt') => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  useEffect(() => {
+    if (grouped.length === 0) return;
+
+    const firstDay = grouped[0][0]; // first group key
+
+    setOpenGroups((prev) => {
+      // already initialized → don’t override user toggles
+      if (Object.keys(prev).length > 0) return prev;
+
+      return { [firstDay]: true };
+    });
+  }, [grouped]);
 
   const renderRow = (patient: Patient) => (
     <TableRow
@@ -167,28 +229,52 @@ export default function PatientList() {
         </Typography>
       </TableCell>
       <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Avatar sx={{ width: 32, height: 32, fontSize: '0.75rem', bgcolor: 'secondary.main' }}>
-            {patient.name?.charAt(0)?.toUpperCase()}
-          </Avatar>
-          <Typography variant="body2" fontWeight={500}>
-            {patient.salutation} {patient.name}
-          </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+          {/* Name + Age/Gender in one line */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
+            <Typography
+              variant="body2"
+              fontWeight={700}
+              noWrap
+              sx={{ lineHeight: 1.2 }}
+            >
+              {patient.salutation} {patient.name}
+            </Typography>
+
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              • {getAge(patient.dateOfBirth)} {genderLabel(patient.gender)}
+            </Typography>
+          </Box>
+
+          {/* Address */}
+          {(patient.address?.street || patient.address?.city) && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+              <LocationOnIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
+
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {patient.address.street || ''}
+                {patient.address.street && patient.address.city ? ', ' : ''}
+                {patient.address.city || ''}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </TableCell>
-      <TableCell>
-        <Typography variant="body2">
-          {getAge(patient.dateOfBirth)} / {genderLabel(patient.gender)}
-        </Typography>
-      </TableCell>
       <TableCell>{patient.phone}</TableCell>
-      <TableCell>
-        {patient.bloodGroup ? (
-          <Chip label={patient.bloodGroup} size="small" color="error" variant="outlined" />
-        ) : (
-          '-'
-        )}
-      </TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
           {patient.tags?.map((tag) => (
@@ -202,11 +288,46 @@ export default function PatientList() {
           {format(new Date(patient.createdAt), 'dd MMM yyyy')}
         </Typography>
       </TableCell>
+      <TableCell>
+        <Chip
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: patient.isActive ? 'success.main' : 'grey.500',
+                }}
+              />
+              {patient.isActive ? 'Active' : 'Inactive'}
+            </Box>
+          }
+          size="small"
+          sx={{
+            bgcolor: patient.isActive ? 'success.light' : 'grey.100',
+            color: patient.isActive ? 'success.dark' : 'text.secondary',
+            fontWeight: 500,
+            borderRadius: 1,
+            px: 0.5,
+          }}
+        />
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" color="text.secondary">
+          {format(new Date(patient.createdAt), 'dd MMM yyyy')}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" color="text.secondary">
+          {format(new Date(patient.createdAt), 'dd MMM yyyy')}
+        </Typography>
+      </TableCell>
     </TableRow>
   );
 
   return (
-    <Box sx={{ height: 'calc(100vh - 112px)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Page header — not sticky, just above table */}
       <Box
         component={motion.div}
@@ -251,27 +372,39 @@ export default function PatientList() {
       </Box>
 
       {/* Scrollable table area — only this scrolls, column header stays fixed */}
-      <Paper sx={{ borderRadius: 3, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Paper sx={{ borderRadius: 1, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <TableContainer sx={{ flex: 1, minHeight: 0 }}>
           <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: COL_WIDTHS.uhid }} />
               <col style={{ width: COL_WIDTHS.name }} />
-              <col style={{ width: COL_WIDTHS.age }} />
               <col style={{ width: COL_WIDTHS.phone }} />
-              <col style={{ width: COL_WIDTHS.blood }} />
               <col style={{ width: COL_WIDTHS.tags }} />
+              <col style={{ width: COL_WIDTHS.regOn }} />
+              <col style={{ width: COL_WIDTHS.regOn }} />
+              <col style={{ width: COL_WIDTHS.regOn }} />
               <col style={{ width: COL_WIDTHS.regOn }} />
             </colgroup>
             <TableHead>
               <TableRow>
                 <TableCell sx={HEADER_CELL_SX}>UHID</TableCell>
-                <TableCell sx={HEADER_CELL_SX}>Name</TableCell>
-                <TableCell sx={HEADER_CELL_SX}>Age / Gender</TableCell>
+                <TableCell
+                  sx={{ ...HEADER_CELL_SX, cursor: 'pointer' }}
+                  onClick={() => handleSort('name')}
+                >
+                  Name {sortBy === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
                 <TableCell sx={HEADER_CELL_SX}>Phone</TableCell>
-                <TableCell sx={HEADER_CELL_SX}>Blood Group</TableCell>
                 <TableCell sx={HEADER_CELL_SX}>Tags</TableCell>
-                <TableCell sx={HEADER_CELL_SX}>Registered On</TableCell>
+                <TableCell sx={HEADER_CELL_SX}>Last Visit</TableCell>
+                <TableCell sx={HEADER_CELL_SX}>Status</TableCell>
+                <TableCell
+                  sx={{ ...HEADER_CELL_SX, cursor: 'pointer' }}
+                  onClick={() => handleSort('createdAt')}
+                >
+                  Joined on {sortBy === 'createdAt' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                </TableCell>
+                <TableCell sx={HEADER_CELL_SX}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -279,7 +412,7 @@ export default function PatientList() {
                 <SkeletonRows />
               ) : grouped.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} sx={{ py: 6, textAlign: 'center', borderBottom: 'none' }}>
+                  <TableCell colSpan={8} sx={{ py: 6, textAlign: 'center', borderBottom: 'none' }}>
                     <Typography color="text.secondary">
                       No patients found for the selected date range.
                     </Typography>
@@ -289,47 +422,51 @@ export default function PatientList() {
                 grouped.map(([day, dayPatients]) => {
                   const isOpen = !!openGroups[day];
                   return (
-                  <Fragment key={day}>
-                    <TableRow
-                      hover
-                      onClick={() => toggleGroup(day)}
-                      sx={{
-                        bgcolor: 'action.hover',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                      }}
-                    >
-                      <TableCell
-                        colSpan={7}
+                    <Fragment key={day}>
+                      <TableRow
+                        hover
+                        onClick={() => toggleGroup(day)}
                         sx={{
-                          py: 1,
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
+                          bgcolor: 'action.hover',
+                          cursor: 'pointer',
+                          userSelect: 'none',
                         }}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <KeyboardArrowDownIcon
-                            fontSize="small"
-                            sx={{
-                              color: 'text.secondary',
-                              transition: 'transform 0.2s ease',
-                              transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                            }}
-                          />
-                          <Typography variant="subtitle2" fontWeight={700}>
-                            Register Date: {formatGroupDate(day)}
-                          </Typography>
-                          <Chip
-                            label={dayPatients.length}
-                            size="small"
-                            color="primary"
-                            sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
-                          />
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                    {isOpen && dayPatients.map(renderRow)}
-                  </Fragment>
+                        <TableCell
+                          colSpan={8}
+                          sx={{
+                            py: 1,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <KeyboardArrowDownIcon
+                              fontSize="small"
+                              sx={{
+                                color: 'text.secondary',
+                                transition: 'transform 0.2s ease',
+                                transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                              }}
+                            />
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              Joining Date: {formatGroupDate(day)}
+                            </Typography>
+                            <Chip
+                              label={dayPatients.length}
+                              size="small"
+                              color="primary"
+                              sx={{
+                                height: 22, width: 22, fontSize: 13, fontWeight: 700,
+                                borderRadius: '50%',
+                                '& .MuiChip-label': { padding: 0 } // Center the text
+                              }}
+                            />
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                      {isOpen && dayPatients.map(renderRow)}
+                    </Fragment>
                   );
                 })
               )}

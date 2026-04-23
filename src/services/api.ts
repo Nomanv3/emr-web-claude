@@ -30,7 +30,7 @@ import type {
   SelectedService,
 } from '@/types';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://srv1490092.hstgr.cloud:5000/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -133,7 +133,7 @@ api.interceptors.response.use(
       flushQueue(null);
       clearAuthStorage();
       // Lazy-load sonner to avoid cycle at module load
-      import('sonner').then(({ toast }) => toast.error('Session expired. Please sign in again.')).catch(() => {});
+      import('sonner').then(({ toast }) => toast.error('Session expired. Please sign in again.')).catch(() => { });
       redirectToLogin();
       return Promise.reject(refreshErr);
     } finally {
